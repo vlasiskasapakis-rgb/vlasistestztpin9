@@ -34,8 +34,9 @@
     ?d=2     αλλάζει το gpsMinDistance σε μέτρα
     ?y=0.9   ανεβάζει τις ετικέτες. 0 = ύψος εδάφους, 0.55 = προεπιλογή,
              αρνητική τιμή τις κατεβάζει
-    ?cal=-12 σταθερή διόρθωση πυξίδας σε μοίρες. Βρες την τιμή με το
-             κουμπί «Βαθμονόμηση» στον χάρτη
+    ?cal=-12 επιβάλλει διόρθωση πυξίδας και παρακάμπτει την αποθηκευμένη.
+             Κανονικά δεν χρειάζεται: βαθμονομείται μόνη της όταν
+             περπατάς και η τιμή αποθηκεύεται στη συσκευή.
     ?debug   δείχνει πόσες ετικέτες μπήκαν και τις ακατέργαστες τιμές
 
   ΧΑΡΤΗΣ
@@ -277,8 +278,10 @@
   <div id="map" aria-label="Χάρτης διαδρομής">
     <button id="calBtn" type="button">Βαθμονόμηση</button>
     <div id="calPanel">
-      <p>Στόχευσε το κινητό ακριβώς προς ένα σημείο που βλέπεις, μετά πάτησέ το.</p>
+      <p>Βαθμονομείται μόνη της όταν περπατάς ευθεία. Αν βιάζεσαι ή δεν
+      μπορείς να περπατήσεις, στόχευσε ένα σημείο που βλέπεις και πάτησέ το.</p>
       <div id="calList"></div>
+      <button class="ghost" id="calReset" type="button">Μηδενισμός και νέα αυτόματη</button>
       <button class="ghost" id="calCancel" type="button">Άκυρο</button>
     </div>
     <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
@@ -351,7 +354,23 @@
   /* Σταθερή διόρθωση πυξίδας σε μοίρες. Κάποιες συσκευές δίνουν τον
      βορρά στραβά κατά σταθερή γωνία — τεκμηριωμένο ζήτημα του AR.js.
      Βρες την τιμή με το κουμπί βαθμονόμησης και βάλ' την εδώ. */
-  var CAL = params.has('cal') ? parseFloat(params.get('cal')) : 0;
+  var CAL_KEY = 'wm-compass-cal';
+  function loadCal() {
+    if (params.has('cal')) { return parseFloat(params.get('cal')) || 0; }
+    try {
+      var v = window.localStorage.getItem(CAL_KEY);
+      return v === null ? null : parseFloat(v);
+    } catch (e) {
+      return null;   // ιδιωτική περιήγηση ή αποκλεισμένη αποθήκευση
+    }
+  }
+  function saveCal(v) {
+    try { window.localStorage.setItem(CAL_KEY, String(v)); } catch (e) { /* αδιάφορο */ }
+  }
+  /* null σημαίνει «δεν έχει βαθμονομηθεί ποτέ» — διαφορετικό από 0,
+     που σημαίνει «μετρήθηκε και βγήκε μηδέν». */
+  var CAL = loadCal();
+  var calAuto = (CAL === null);
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
@@ -558,6 +577,46 @@
     return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Αυτόματη βαθμονόμηση, χωρίς να στοχεύσεις τίποτα                   */
+  /* Όταν περπατάς, το GPS δίνει την κατεύθυνση της πορείας σου ως      */
+  /* πραγματική διόπτευση. Η διαφορά της από την ένδειξη της πυξίδας    */
+  /* είναι η απόκλιση της συσκευής. Χρειάζεται μόνο ευθύ βάδισμα.       */
+  /* ---------------------------------------------------------------- */
+  var AUTO_MIN_SPEED = 1.2;   // μ./δευτ. — πιο αργά η πορεία είναι θόρυβος
+  var AUTO_MAX_ACC   = 30;    // μ. — χειρότερο στίγμα δεν εμπιστευόμαστε
+  var AUTO_SAMPLES   = 8;
+  var sumSin = 0, sumCos = 0, nSamples = 0;
+
+  function autoCalibrate(coords) {
+    if (!calAuto || rawHeading === null) { return; }
+    if (coords.speed === null || coords.speed < AUTO_MIN_SPEED) { return; }
+    if (coords.heading === null || isNaN(coords.heading)) { return; }
+    if (coords.accuracy > AUTO_MAX_ACC) { return; }
+
+    var off = ((coords.heading - rawHeading + 540) % 360) - 180;
+    /* Κυκλικός μέσος όρος: ο αριθμητικός θα έσπαγε στο πέρασμα
+       από τις 359 στη 1 μοίρα. */
+    sumSin += Math.sin(off * Math.PI / 180);
+    sumCos += Math.cos(off * Math.PI / 180);
+    nSamples++;
+
+    if (nSamples >= AUTO_SAMPLES) {
+      var mean = Math.atan2(sumSin, sumCos) * 180 / Math.PI;
+      CAL = Math.round(mean * 10) / 10;
+      calAuto = false;
+      saveCal(CAL);
+      applyHeadingToDot();
+    }
+  }
+
+  function autoProgress() {
+    if (!calAuto) { return ''; }
+    return nSamples > 0
+      ? '   βαθμονόμηση ' + nSamples + '/' + AUTO_SAMPLES
+      : '   περπάτα ευθεία για βαθμονόμηση';
+  }
+
   function initCalibration() {
     var panel = $('calPanel'), list = $('calList');
 
@@ -576,10 +635,11 @@
            για -20 — η μεγάλη τιμή θα ήταν σωστή αλλά δυσανάγνωστη. */
         var off = ((trueB - rawHeading + 540) % 360) - 180;
         CAL = Math.round(off * 10) / 10;
+        calAuto = false;
+        saveCal(CAL);
         panel.classList.remove('on');
         $('status').textContent =
-          'Διόρθωση ' + (CAL > 0 ? '+' : '') + CAL + '°  ·  πρόσθεσε ?cal=' +
-          CAL + ' στο URL για να μείνει';
+          'Διόρθωση ' + (CAL > 0 ? '+' : '') + CAL + '° — αποθηκεύτηκε';
         applyHeadingToDot();
       });
       list.appendChild(b);
@@ -587,6 +647,14 @@
 
     $('calBtn').addEventListener('click', function () { panel.classList.add('on'); });
     $('calCancel').addEventListener('click', function () { panel.classList.remove('on'); });
+    $('calReset').addEventListener('click', function () {
+      CAL = null; calAuto = true;
+      sumSin = 0; sumCos = 0; nSamples = 0;
+      try { window.localStorage.removeItem(CAL_KEY); } catch (e) { /* αδιάφορο */ }
+      panel.classList.remove('on');
+      $('status').textContent = 'Μηδενίστηκε. Περπάτα ευθεία λίγα δευτερόλεπτα.';
+      applyHeadingToDot();
+    });
   }
 
   /* Στρέφει τον κώνο του δείκτη. Ο χάρτης είναι προσανατολισμένος με
@@ -689,7 +757,7 @@
     }
     if (hd === null) { return; }
     rawHeading = (hd + screenAngle()) % 360;
-    heading = (rawHeading + CAL + 360) % 360;
+    heading = (rawHeading + (CAL || 0) + 360) % 360;
     if (!needle) {
       needle = document.querySelector('#compass .needle');
       degOut = document.querySelector('#compass .deg');
@@ -716,6 +784,7 @@
     };
     scaleLabels();
     updateMap();
+    autoCalibrate(pos.coords);
 
     var dbg = params.has('debug')
       ? '   ετικέτες ' + document.querySelectorAll('.poi').length + '   ' + rawSeen
@@ -724,7 +793,7 @@
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
       'πυξίδα ' + (heading === null ? '—' : Math.round(heading) + '°') +
       (CAL ? '  (διόρθ. ' + (CAL > 0 ? '+' : '') + CAL + '°)' : '') +
-      '   ύψος ' + Y_OFF + dbg;
+      autoProgress() + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
