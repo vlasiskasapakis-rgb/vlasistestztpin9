@@ -34,7 +34,9 @@
     ?d=2     αλλάζει το gpsMinDistance σε μέτρα
     ?y=0.9   ανεβάζει τις ετικέτες. 0 = ύψος εδάφους, 0.55 = προεπιλογή,
              αρνητική τιμή τις κατεβάζει
-    ?debug   δείχνει πόσες ετικέτες μπήκαν στη σκηνή
+    ?cal=-12 σταθερή διόρθωση πυξίδας σε μοίρες. Βρες την τιμή με το
+             κουμπί «Βαθμονόμηση» στον χάρτη
+    ?debug   δείχνει πόσες ετικέτες μπήκαν και τις ακατέργαστες τιμές
 
   ΧΑΡΤΗΣ
     Leaflet 1.9.4 + πλακίδια OpenStreetMap, σε συρόμενο φύλλο. Κλειστό
@@ -141,10 +143,23 @@
     background: rgba(14,42,46,.92); color: var(--bone);
     display: flex; align-items: center; justify-content: center;
   }
+  /* Η βελόνα περιστρέφεται γύρω από το ΚΕΝΤΡΟ του κύκλου. Πριν, το
+     transform-origin ήταν μέσα στο κουτί του ίδιου του τριγώνου, οπότε
+     η βελόνα έφευγε εκτός κέντρου καθώς γύριζε. */
   #compass .needle {
+    position: absolute; inset: 0; transform-origin: 50% 50%;
+  }
+  #compass .needle::before {
+    content: ''; position: absolute; left: 50%; top: 8px;
+    transform: translateX(-50%);
     width: 0; height: 0; border-left: 7px solid transparent;
-    border-right: 7px solid transparent; border-bottom: 24px solid var(--chalk);
-    transform-origin: 50% 70%;
+    border-right: 7px solid transparent; border-bottom: 19px solid var(--chalk);
+  }
+  #compass .needle::after {
+    content: ''; position: absolute; left: 50%; bottom: 12px;
+    transform: translateX(-50%);
+    width: 0; height: 0; border-left: 7px solid transparent;
+    border-right: 7px solid transparent; border-top: 19px solid rgba(242,237,228,.28);
   }
   #compass .deg {
     position: absolute; bottom: 3px; left: 0; right: 0; text-align: center;
@@ -153,14 +168,36 @@
 
   /* Δείκτης θέσης με κώνο κατεύθυνσης. Ο κώνος έχει την κορυφή του
      πάνω στην κουκκίδα και ανοίγει προς τα εκεί που κοιτάς. */
+  #calBtn {
+    position: absolute; top: calc(var(--handle) + 10px); left: 10px; z-index: 500;
+    padding: 9px 12px; background: rgba(14,42,46,.92); color: var(--bone);
+    font-size: 13px;
+  }
+  #calPanel {
+    position: absolute; inset: var(--handle) 0 0 0; z-index: 600;
+    display: none; flex-direction: column; justify-content: center;
+    padding: var(--pad); background: rgba(14,42,46,.96);
+  }
+  #calPanel.on { display: flex; }
+  #calPanel p { margin: 0 0 14px; font-size: 15px; color: #B9CFD1; max-width: 44ch; }
+  #calPanel button {
+    display: block; width: 100%; margin-bottom: 9px; padding: 13px;
+    background: var(--bone); color: var(--ink); font-size: 16px;
+    font-weight: 600; text-align: left;
+  }
+  #calPanel button.ghost { background: transparent; color: #8FC0C4; font-weight: 400; }
+
   .me-wrap { position: relative; width: 56px; height: 56px; }
   .me-rot  { position: absolute; inset: 0; transform-origin: 50% 50%; }
   .me-cone {
     position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%);
     width: 0; height: 0;
-    border-left: 15px solid transparent;
-    border-right: 15px solid transparent;
-    border-top: 26px solid rgba(240, 194, 68, 0.42);
+    border-left: 17px solid transparent;
+    border-right: 17px solid transparent;
+    border-top: 30px solid rgba(240, 194, 68, 0.88);
+    /* Περίγραμμα σε σκούρο, ώστε ο κώνος να ξεχωρίζει και πάνω από
+       ανοιχτόχρωμα πλακίδια του χάρτη, όχι μόνο πάνω από σκούρα. */
+    filter: drop-shadow(0 0 2px rgba(14, 42, 46, 0.95));
   }
   /* Χωρίς έγκυρη πυξίδα δεν δείχνουμε κατεύθυνση που δεν ξέρουμε. */
   .me-rot.unknown .me-cone { display: none; }
@@ -238,6 +275,12 @@
     <span class="hint">σύρε πάνω</span>
   </button>
   <div id="map" aria-label="Χάρτης διαδρομής">
+    <button id="calBtn" type="button">Βαθμονόμηση</button>
+    <div id="calPanel">
+      <p>Στόχευσε το κινητό ακριβώς προς ένα σημείο που βλέπεις, μετά πάτησέ το.</p>
+      <div id="calList"></div>
+      <button class="ghost" id="calCancel" type="button">Άκυρο</button>
+    </div>
     <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
   </div>
 </div>
@@ -304,7 +347,11 @@
      απόστασης, η μετατόπιση παραμένει σταθερή ΣΕ ΓΩΝΙΑ: μια ετικέτα
      στα 100 μ. και μια στα 585 μ. ανεβαίνουν το ίδιο στην οθόνη.
      0.55 ~ 3 μοίρες πάνω από τον ορίζοντα. */
-  var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 1;
+  var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 0.55;
+  /* Σταθερή διόρθωση πυξίδας σε μοίρες. Κάποιες συσκευές δίνουν τον
+     βορρά στραβά κατά σταθερή γωνία — τεκμηριωμένο ζήτημα του AR.js.
+     Βρες την τιμή με το κουμπί βαθμονόμησης και βάλ' την εδώ. */
+  var CAL = params.has('cal') ? parseFloat(params.get('cal')) : 0;
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
@@ -496,6 +543,52 @@
     if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Βαθμονόμηση πυξίδας                                               */
+  /* Στοχεύεις ένα σημείο που ξέρεις πού είναι. Ξέρουμε την πραγματική */
+  /* του διόπτευση από τις συντεταγμένες, ξέρουμε τι λέει ο αισθητήρας */
+  /* — η διαφορά είναι η σταθερή απόκλιση της συσκευής.                */
+  /* ---------------------------------------------------------------- */
+  function bearingTo(lat1, lon1, lat2, lon2) {
+    var r = function (d) { return d * Math.PI / 180; };
+    var dLon = r(lon2 - lon1);
+    var y = Math.sin(dLon) * Math.cos(r(lat2));
+    var x = Math.cos(r(lat1)) * Math.sin(r(lat2)) -
+            Math.sin(r(lat1)) * Math.cos(r(lat2)) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
+  function initCalibration() {
+    var panel = $('calPanel'), list = $('calList');
+
+    STORIES.forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = s.title;
+      b.addEventListener('click', function () {
+        if (!me || rawHeading === null) {
+          $('status').textContent = 'Χρειάζεται στίγμα και πυξίδα πρώτα.';
+          panel.classList.remove('on');
+          return;
+        }
+        var trueB = bearingTo(me.lat, me.lon, s.lat, s.lon);
+        /* Κανονικοποίηση στο [-180, 180] ώστε να μη βγει π.χ. 340 αντί
+           για -20 — η μεγάλη τιμή θα ήταν σωστή αλλά δυσανάγνωστη. */
+        var off = ((trueB - rawHeading + 540) % 360) - 180;
+        CAL = Math.round(off * 10) / 10;
+        panel.classList.remove('on');
+        $('status').textContent =
+          'Διόρθωση ' + (CAL > 0 ? '+' : '') + CAL + '°  ·  πρόσθεσε ?cal=' +
+          CAL + ' στο URL για να μείνει';
+        applyHeadingToDot();
+      });
+      list.appendChild(b);
+    });
+
+    $('calBtn').addEventListener('click', function () { panel.classList.add('on'); });
+    $('calCancel').addEventListener('click', function () { panel.classList.remove('on'); });
+  }
+
   /* Στρέφει τον κώνο του δείκτη. Ο χάρτης είναι προσανατολισμένος με
      τον βορρά πάνω, οπότε ο κώνος γυρίζει κατά +heading — αντίθετα από
      τη βελόνα της πυξίδας, που δείχνει τον βορρά και γυρίζει κατά
@@ -582,10 +675,21 @@
     return window.orientation || 0;
   }
 
+  var rawSeen = '';
+  var rawHeading = null;
   function onOrientation(e) {
     var hd = readHeading(e);
+    if (params.has('debug')) {
+      rawSeen =
+        (typeof e.webkitCompassHeading === 'number'
+          ? 'wk ' + Math.round(e.webkitCompassHeading)
+          : 'a ' + (e.alpha === null ? '—' : Math.round(e.alpha)) +
+            '/' + (e.absolute ? 'abs' : 'rel')) +
+        ' scr ' + screenAngle();
+    }
     if (hd === null) { return; }
-    heading = (hd + screenAngle()) % 360;
+    rawHeading = (hd + screenAngle()) % 360;
+    heading = (rawHeading + CAL + 360) % 360;
     if (!needle) {
       needle = document.querySelector('#compass .needle');
       degOut = document.querySelector('#compass .deg');
@@ -614,12 +718,13 @@
     updateMap();
 
     var dbg = params.has('debug')
-      ? '   ετικέτες ' + document.querySelectorAll('.poi').length
+      ? '   ετικέτες ' + document.querySelectorAll('.poi').length + '   ' + rawSeen
       : '';
     $('status').textContent =
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
       'πυξίδα ' + (heading === null ? '—' : Math.round(heading) + '°') +
-      '   εξομάλυνση ' + SMOOTHING + '   ύψος ' + Y_OFF + dbg;
+      (CAL ? '  (διόρθ. ' + (CAL > 0 ? '+' : '') + CAL + '°)' : '') +
+      '   ύψος ' + Y_OFF + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
@@ -671,6 +776,7 @@
       $('hud').classList.add('on');
       initMap();
       initDrawer();
+      initCalibration();
       listenHeading();
 
       if (!navigator.geolocation) {
