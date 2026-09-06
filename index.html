@@ -151,7 +151,22 @@
     font-size: 10px; font-variant-numeric: tabular-nums; color: #8FC0C4;
   }
 
+  /* Δείκτης θέσης με κώνο κατεύθυνσης. Ο κώνος έχει την κορυφή του
+     πάνω στην κουκκίδα και ανοίγει προς τα εκεί που κοιτάς. */
+  .me-wrap { position: relative; width: 56px; height: 56px; }
+  .me-rot  { position: absolute; inset: 0; transform-origin: 50% 50%; }
+  .me-cone {
+    position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 26px solid rgba(240, 194, 68, 0.42);
+  }
+  /* Χωρίς έγκυρη πυξίδα δεν δείχνουμε κατεύθυνση που δεν ξέρουμε. */
+  .me-rot.unknown .me-cone { display: none; }
   .me-dot {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
     width: 18px; height: 18px; border-radius: 50%;
     background: var(--chalk); border: 3px solid var(--ink);
   }
@@ -461,8 +476,11 @@
     if (!meMarker) {
       meMarker = L.marker(ll, {
         icon: L.divIcon({
-          className: '', html: '<div class="me-dot"></div>',
-          iconSize: [18, 18], iconAnchor: [9, 9]
+          className: '',
+          html: '<div class="me-wrap"><div class="me-rot unknown">' +
+                '<div class="me-cone"></div><div class="me-dot"></div>' +
+                '</div></div>',
+          iconSize: [56, 56], iconAnchor: [28, 28]
         }),
         title: 'Η θέση σου', alt: 'Η θέση σου', zIndexOffset: 1000
       }).addTo(map);
@@ -470,11 +488,27 @@
         radius: me.accuracy || 0, color: '#F0C244', weight: 1,
         fillColor: '#F0C244', fillOpacity: 0.10
       }).addTo(map);
+      applyHeadingToDot();
     } else {
       meMarker.setLatLng(ll);
       accCircle.setLatLng(ll).setRadius(me.accuracy || 0);
     }
     if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
+  }
+
+  /* Στρέφει τον κώνο του δείκτη. Ο χάρτης είναι προσανατολισμένος με
+     τον βορρά πάνω, οπότε ο κώνος γυρίζει κατά +heading — αντίθετα από
+     τη βελόνα της πυξίδας, που δείχνει τον βορρά και γυρίζει κατά
+     -heading. */
+  function applyHeadingToDot() {
+    if (!meMarker) { return; }
+    var elm = meMarker.getElement();
+    if (!elm) { return; }
+    var rot = elm.querySelector('.me-rot');
+    if (!rot) { return; }
+    if (heading === null) { rot.classList.add('unknown'); return; }
+    rot.classList.remove('unknown');
+    rot.style.transform = 'rotate(' + heading + 'deg)';
   }
 
   /* ---------------------------------------------------------------- */
@@ -559,6 +593,7 @@
     /* Η βελόνα δείχνει τον βορρά, οπότε γυρίζει αντίθετα από εσένα. */
     needle.style.transform = 'rotate(' + (-heading) + 'deg)';
     degOut.textContent = Math.round(heading) + '°';
+    applyHeadingToDot();
   }
 
   function listenHeading() {
