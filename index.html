@@ -225,7 +225,7 @@
 (function () {
   'use strict';
 
-  // Θυμήσου να ενημερώσεις τις συντεταγμένες lat/lon με τις πραγματικές
+  // Θυμήσου να ενημερώσεις τις συντεταγμένες lat/lon με τις πραγματικές!
   var STORIES = [
     {
       id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
@@ -257,6 +257,9 @@
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
 
+  // Η καθολική μεταβλητή για την κατεύθυνση, την οποία υπολογίζει πλέον η 3D κάμερα
+  window.currentHeading = null;
+
   function distanceMetres(lat1, lon1, lat2, lon2) {
     var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
     var dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
@@ -278,6 +281,42 @@
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
       o.lookAt(_camPos.x, o.position.y, _camPos.z);
+    }
+  });
+
+  // ΝΕΟ: Εξάγει την κατεύθυνση κατευθείαν από την AR κάμερα. Έτσι λύνεται το Gimbal Lock.
+  var _cameraDir = new THREE.Vector3();
+  AFRAME.registerComponent('hud-compass', {
+    tick: function () {
+      var cam = this.el.sceneEl && this.el.sceneEl.camera;
+      if (!cam) return;
+      
+      cam.getWorldDirection(_cameraDir);
+      
+      // Προβολή του διανύσματος στο οριζόντιο επίπεδο (X-Z)
+      var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
+      if (h < 0) h += 360;
+      window.currentHeading = h;
+
+      if (this.displayHeading === undefined) this.displayHeading = h;
+      
+      // Εύρεση της πιο σύντομης διαδρομής περιστροφής (αποτρέπει το απότομο γύρισμα 360 μοιρών)
+      var diff = h - (this.displayHeading % 360);
+      if (diff > 180) diff -= 360;
+      else if (diff < -180) diff += 360;
+      this.displayHeading += diff;
+
+      if (!this.needle) {
+        this.needle = document.querySelector('#compass .needle');
+        this.degOut = document.querySelector('#compass .deg');
+      }
+      if (this.needle) {
+        this.needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
+        this.degOut.textContent = Math.round(h) + '°';
+      }
+      
+      // Ενημέρωση και του δείκτη στον χάρτη
+      applyHeadingToDot();
     }
   });
 
@@ -332,6 +371,7 @@
     );
 
     var scene = document.createElement('a-scene');
+    scene.setAttribute('hud-compass', ''); // Συνδέουμε το component στο scene
     scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('loading-screen', 'enabled: false');
     scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
@@ -398,7 +438,6 @@
         radius: me.accuracy || 0, color: '#F0C244', weight: 1,
         fillColor: '#F0C244', fillOpacity: 0.10
       }).addTo(map);
-      applyHeadingToDot();
     } else {
       meMarker.setLatLng(ll);
       accCircle.setLatLng(ll).setRadius(me.accuracy || 0);
@@ -406,15 +445,26 @@
     if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
   }
 
+  var cachedRot = null;
+  var displayMapHeading = 0;
   function applyHeadingToDot() {
-    if (!meMarker) { return; }
-    var elm = meMarker.getElement();
-    if (!elm) { return; }
-    var rot = elm.querySelector('.me-rot');
-    if (!rot) { return; }
-    if (heading === null) { rot.classList.add('unknown'); return; }
-    rot.classList.remove('unknown');
-    rot.style.transform = 'rotate(' + heading + 'deg)';
+    if (!meMarker || window.currentHeading === null) return;
+    
+    // Αποθήκευση του DOM στοιχείου για να είναι αποδοτικό στο tick της κάμερας
+    if (!cachedRot) {
+      var elm = meMarker.getElement();
+      if (elm) cachedRot = elm.querySelector('.me-rot');
+    }
+    if (!cachedRot) return;
+
+    cachedRot.classList.remove('unknown');
+    
+    var diff = window.currentHeading - (displayMapHeading % 360);
+    if (diff > 180) diff -= 360;
+    else if (diff < -180) diff += 360;
+    displayMapHeading += diff;
+
+    cachedRot.style.transform = 'rotate(' + displayMapHeading + 'deg)';
   }
 
   function setDrawer(open) {
@@ -456,56 +506,6 @@
     });
   }
 
-  var heading = null;
-  var needle = null, degOut = null;
-
-  function readHeading(e) {
-    if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
-      return e.webkitCompassHeading;
-    }
-    if (e.absolute === true && typeof e.alpha === 'number') {
-      return (360 - e.alpha) % 360;
-    }
-    return null;
-  }
-
-  function screenAngle() {
-    if (screen.orientation && typeof screen.orientation.angle === 'number') {
-      return screen.orientation.angle;
-    }
-    return window.orientation || 0;
-  }
-
-  var rawSeen = '';
-  function onOrientation(e) {
-    var hd = readHeading(e);
-    if (params.has('debug')) {
-      rawSeen =
-        (typeof e.webkitCompassHeading === 'number'
-          ? 'wk ' + Math.round(e.webkitCompassHeading)
-          : 'a ' + (e.alpha === null ? '—' : Math.round(e.alpha)) +
-            '/' + (e.absolute ? 'abs' : 'rel')) +
-        ' scr ' + screenAngle();
-    }
-    if (hd === null) { return; }
-    
-    // Η τελική τιμή πυξίδας
-    heading = (hd + screenAngle()) % 360;
-    
-    if (!needle) {
-      needle = document.querySelector('#compass .needle');
-      degOut = document.querySelector('#compass .deg');
-    }
-    needle.style.transform = 'rotate(' + (-heading) + 'deg)';
-    degOut.textContent = Math.round(heading) + '°';
-    applyHeadingToDot();
-  }
-
-  function listenHeading() {
-    window.addEventListener('deviceorientationabsolute', onOrientation, true);
-    window.addEventListener('deviceorientation', onOrientation, true);
-  }
-
   function onPosition(pos) {
     me = {
       lat: pos.coords.latitude,
@@ -515,12 +515,10 @@
     scaleLabels();
     updateMap();
 
-    var dbg = params.has('debug')
-      ? '   ετικέτες ' + document.querySelectorAll('.poi').length + '   ' + rawSeen
-      : '';
+    var dbg = params.has('debug') ? '   ετικέτες ' + document.querySelectorAll('.poi').length : '';
     $('status').textContent =
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
-      'πυξίδα ' + (heading === null ? '—' : Math.round(heading) + '°') + dbg;
+      'πυξίδα ' + (window.currentHeading === null ? '—' : Math.round(window.currentHeading) + '°') + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
@@ -567,7 +565,6 @@
       $('hud').classList.add('on');
       initMap();
       initDrawer();
-      listenHeading();
 
       if (!navigator.geolocation) {
         $('status').textContent = 'Η συσκευή δεν δίνει τοποθεσία.';
