@@ -37,7 +37,9 @@
     ?debug   δείχνει πόσες ετικέτες μπήκαν στη σκηνή
 
   ΧΑΡΤΗΣ
-    Leaflet 1.9.4 + πλακίδια OpenStreetMap, στο κάτω μισό της οθόνης.
+    Leaflet 1.9.4 + πλακίδια OpenStreetMap, σε συρόμενο φύλλο. Κλειστό
+    αφήνει μόνο τη λαβή, οπότε η κάμερα μένει ακάλυπτη. Σύρε τη λαβή
+    πάνω ή πάτησέ την.
     Ο κύκλος γύρω από τη θέση σου είναι το σφάλμα του GPS — χρήσιμος
     δείκτης όταν καταγράφεις μετρήσεις στο πεδίο.
 
@@ -54,6 +56,7 @@
   :root {
     --ink: #0E2A2E; --bone: #F2EDE4; --chalk: #F0C244;
     --sea: #4E8C93; --pad: 16px;
+    --handle: calc(52px + env(safe-area-inset-bottom));
   }
   * { box-sizing: border-box; }
   html, body {
@@ -94,14 +97,37 @@
     left: var(--pad); right: var(--pad); padding: 9px 13px;
     background: rgba(14,42,46,.92); font-size: 14px; font-variant-numeric: tabular-nums;
   }
-  /* Ο χάρτης καλύπτει το κάτω μισό. Η σκηνή AR μένει σε πλήρη οθόνη
-     από κάτω: αν την περιορίζαμε σε 50%, το A-Frame δεν ξαναϋπολογίζει
-     την αναλογία και οι ετικέτες θα έπεφταν σε λάθος σημείο. */
-  #map {
-    position: fixed; left: 0; right: 0; bottom: 0; height: 50%;
-    z-index: 15; background: #0A1F22;
-    border-top: 3px solid var(--chalk);
+  /* Ο χάρτης είναι συρόμενο φύλλο. Κλειστός αφήνει μόνο τη λαβή, ώστε
+     η κάμερα να μένει ακάλυπτη. Η σκηνή AR είναι έτσι κι αλλιώς σε
+     πλήρη οθόνη από κάτω — ο χάρτης δεν τη σμικρύνει ποτέ, γιατί το
+     A-Frame δεν ξαναϋπολογίζει την αναλογία και οι ετικέτες θα
+     έπεφταν σε λάθος σημείο. */
+  #drawer {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 52%;
+    z-index: 15; display: flex; flex-direction: column;
+    transform: translateY(calc(100% - var(--handle)));
+    transition: transform .28s cubic-bezier(.32,.72,0,1);
+    will-change: transform;
   }
+  #drawer.open { transform: translateY(0); }
+
+  #handle {
+    flex: none; height: var(--handle); width: 100%;
+    display: flex; align-items: center; gap: 11px;
+    padding: 0 var(--pad);
+    background: var(--ink); color: var(--bone);
+    border-top: 3px solid var(--chalk);
+    text-align: left; touch-action: none;
+  }
+  #handle .grip {
+    width: 34px; height: 4px; border-radius: 2px;
+    background: rgba(242,237,228,.45); flex: none;
+  }
+  #handle .lbl { font-size: 15px; font-weight: 600; }
+  #handle .hint { font-size: 13px; color: #8FC0C4; margin-left: auto; }
+
+  #map { flex: 1; background: #0A1F22; }
+
   .leaflet-container { background: #0A1F22; font-family: inherit; }
   .leaflet-control-attribution {
     background: rgba(14,42,46,.85) !important; color: #B9CFD1 !important;
@@ -110,7 +136,7 @@
   .leaflet-control-attribution a { color: var(--chalk) !important; }
 
   #compass {
-    position: absolute; top: 10px; right: 10px; z-index: 500;
+    position: absolute; top: calc(var(--handle) + 10px); right: 10px; z-index: 500;
     width: 54px; height: 54px; border-radius: 50%;
     background: rgba(14,42,46,.92); color: var(--bone);
     display: flex; align-items: center; justify-content: center;
@@ -136,12 +162,14 @@
 
   #nearest {
     position: absolute; left: var(--pad); right: var(--pad);
-    bottom: calc(50% + var(--pad));
+    bottom: calc(var(--handle) + var(--pad));
+    transition: bottom .28s cubic-bezier(.32,.72,0,1);
     pointer-events: auto; display: none; width: calc(100% - var(--pad)*2);
     text-align: left; padding: 15px 17px; background: var(--bone);
     color: var(--ink); border-left: 5px solid var(--chalk);
   }
   #nearest.on { display: block; }
+  body.drawer-open #nearest { bottom: calc(52% + var(--pad)); }
   #nearest .dist {
     display: block; font-size: 14px; color: var(--sea);
     font-variant-numeric: tabular-nums; margin-bottom: 2px;
@@ -166,7 +194,9 @@
     display: inline-block; margin-bottom: 16px; padding: 5px 9px;
     background: rgba(78,140,147,.16); color: var(--sea); font-size: 13px;
   }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) {
+    #drawer, #nearest { transition: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -186,8 +216,15 @@
   </button>
 </div>
 
-<div id="map" aria-label="Χάρτης διαδρομής">
-  <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
+<div id="drawer">
+  <button id="handle" type="button" aria-expanded="false" aria-controls="map">
+    <span class="grip" aria-hidden="true"></span>
+    <span class="lbl">Χάρτης</span>
+    <span class="hint">σύρε πάνω</span>
+  </button>
+  <div id="map" aria-label="Χάρτης διαδρομής">
+    <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
+  </div>
 </div>
 
 <div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -252,7 +289,7 @@
      απόστασης, η μετατόπιση παραμένει σταθερή ΣΕ ΓΩΝΙΑ: μια ετικέτα
      στα 100 μ. και μια στα 585 μ. ανεβαίνουν το ίδιο στην οθόνη.
      0.55 ~ 3 μοίρες πάνω από τον ορίζοντα. */
-  var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 4.4;
+  var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 0.55;
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
@@ -441,6 +478,53 @@
   }
 
   /* ---------------------------------------------------------------- */
+  /* Συρόμενο φύλλο                                                    */
+  /* Το Leaflet υπολογίζει το μέγεθος του καμβά μία φορά. Αν αλλάξει   */
+  /* το ορατό ύψος χωρίς invalidateSize(), τα πλακίδια βγαίνουν        */
+  /* μισοφορτωμένα και ο δείκτης θέσης πέφτει εκτός κέντρου.           */
+  /* ---------------------------------------------------------------- */
+  function setDrawer(open) {
+    var d = $('drawer'), hd = $('handle');
+    d.classList.toggle('open', open);
+    document.body.classList.toggle('drawer-open', open);
+    hd.setAttribute('aria-expanded', open ? 'true' : 'false');
+    hd.querySelector('.hint').textContent = open ? 'σύρε κάτω' : 'σύρε πάνω';
+    if (map) {
+      map.invalidateSize();
+      setTimeout(function () { map.invalidateSize(); if (open) { updateMap(); } }, 300);
+    }
+  }
+
+  function initDrawer() {
+    var hd = $('handle');
+    var startY = null, moved = false;
+
+    hd.addEventListener('click', function () {
+      if (moved) { moved = false; return; }
+      setDrawer(!$('drawer').classList.contains('open'));
+    });
+
+    hd.addEventListener('pointerdown', function (e) {
+      startY = e.clientY; moved = false;
+      hd.setPointerCapture(e.pointerId);
+    });
+
+    hd.addEventListener('pointermove', function (e) {
+      if (startY === null) { return; }
+      if (Math.abs(e.clientY - startY) > 12) { moved = true; }
+    });
+
+    hd.addEventListener('pointerup', function (e) {
+      if (startY === null) { return; }
+      var dy = e.clientY - startY;
+      if (Math.abs(dy) > 24) { setDrawer(dy < 0); }   // πάνω = άνοιγμα
+      startY = null;
+    });
+
+    /* Πληκτρολόγιο: το <button> καλύπτεται ήδη από το click. */
+  }
+
+  /* ---------------------------------------------------------------- */
   /* Πυξίδα — διαβάζεται ξεχωριστά από το AR.js, ώστε ο δείκτης του    */
   /* χάρτη να μην εξαρτάται από εσωτερικά της βιβλιοθήκης.            */
   /* ---------------------------------------------------------------- */
@@ -551,6 +635,7 @@
       $('gate').style.display = 'none';
       $('hud').classList.add('on');
       initMap();
+      initDrawer();
       listenHeading();
 
       if (!navigator.geolocation) {
