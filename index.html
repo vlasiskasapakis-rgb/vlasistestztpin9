@@ -6,59 +6,62 @@
 <title>Διαδρομή μνήμης — Μυτιλήνη</title>
 
 <!--
-  WALKING MEMORY (GA 101288157) — τεχνικό spike για το Task 4.2.
-  Ένα αρχείο, μηδέν εξαρτήσεις, μηδέν build. Ανεβάζεις και παίζει.
+  WALKING MEMORY (GA 101288157) — spike για το Task 4.2.
+  Ένα αρχείο. Ανεβάζεις σε GitHub Pages και παίζει.
 
-  ΤΙ ΧΡΗΣΙΜΟΠΟΙΕΙ
-    getUserMedia          η ροή της κάμερας
-    Geolocation           το στίγμα
-    DeviceOrientation     η πυξίδα
-  Καμία σχέση με WebXR, που το Safari δεν υλοποιεί σε iOS.
+  ΤΙ ΔΙΟΡΘΩΘΗΚΕ ΣΕ ΣΧΕΣΗ ΜΕ ΤΗΝ ΠΡΟΗΓΟΥΜΕΝΗ ΕΚΔΟΣΗ
 
-  ΟΙ ΕΤΙΚΕΤΕΣ ΕΙΝΑΙ HTML, ΟΧΙ WebGL
-  Επίτηδες: ένα <button> το διαβάζει το VoiceOver και το TalkBack, ένα
-  sprite μέσα σε καμβά όχι. Δένει με τη δέσμευση του Task 4.7 για
-  screen reader compatibility.
-
-  ΑΠΑΙΤΕΙ HTTPS. Το GitHub Pages είναι ήδη HTTPS, οπότε εντάξει.
-  Τοπικά, μόνο μέσω localhost.
+  1. Νέα location-based components: gps-new-camera / gps-new-entity-place
+     αντί για τα παλιά gps-camera / gps-entity-place.
+  2. gpsMinDistance: 5 — η κάμερα δεν επανατοποθετείται μέχρι να
+     μετακινηθείς 5 μ. Κόβει το πήδημα από την ανακρίβεια του GPS.
+  3. arjs-device-orientation-controls smoothingFactor: 0.1 — εκθετική
+     εξομάλυνση των αισθητήρων. Το look-controls-enabled="false" είναι
+     υποχρεωτικό: το component αντικαθιστά τα look-controls του A-Frame.
+  4. Κλειδωμένες εκδόσεις (AR.js 3.4.7) αντί για master.
+  5. aframe-ar.js αντί για aframe-ar-nft.js — το NFT είναι image tracking
+     και δεν χρησιμοποιείται εδώ.
+  6. Κουμπί εκκίνησης. Στο iOS το DeviceOrientationEvent.requestPermission()
+     ΠΡΕΠΕΙ να κληθεί μέσα σε χειρονομία χρήστη.
+  7. Καθόλου εξωτερικά αρχεία εικόνας. Οι ετικέτες ζωγραφίζονται σε canvas,
+     ώστε να αποδίδονται σωστά τα ελληνικά — η προεπιλεγμένη γραμματοσειρά
+     του a-text δεν έχει ελληνικούς χαρακτήρες.
+  8. Τα σημεία απομακρύνθηκαν μεταξύ τους. Δύο σημεία στα 6 μ. δεν
+     διαχωρίζονται ποτέ με σφάλμα GPS ±10-20 μ.
 
   ΠΑΡΑΜΕΤΡΟΙ URL
-    ?demo    ψεύτικο στίγμα στο κέντρο, για δοκιμή από γραφείο
-    ?calib   προσθέτει Β/Ν/Α/Δ στα 60 μ., για έλεγχο της πυξίδας
+    ?k=0.2   αλλάζει το smoothingFactor για σύγκριση στο πεδίο
+    ?d=2     αλλάζει το gpsMinDistance σε μέτρα
+
+  ΑΠΑΙΤΕΙ HTTPS.
 -->
+
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
 <style>
   :root {
-    --ink: #0E2A2E;
-    --bone: #F2EDE4;
-    --chalk: #F0C244;
-    --sea: #4E8C93;
-    --sea-light: #8FC0C4;
-    --pad: 16px;
+    --ink: #0E2A2E; --bone: #F2EDE4; --chalk: #F0C244;
+    --sea: #4E8C93; --pad: 16px;
   }
   * { box-sizing: border-box; }
   html, body {
-    width: 100%; height: 100%; margin: 0; padding: 0;
-    overflow: hidden; background: var(--ink); color: var(--bone);
+    width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+    background: var(--ink); color: var(--bone);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                  "Helvetica Neue", "Noto Sans", sans-serif;
     font-size: 17px; line-height: 1.5; -webkit-text-size-adjust: 100%;
   }
   button { font: inherit; cursor: pointer; border: 0; border-radius: 2px; }
   button:focus-visible { outline: 3px solid var(--chalk); outline-offset: 3px; }
+  canvas.labelsrc { display: none; }
 
-  #feed {
-    position: fixed; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; z-index: 0; background: #000;
-  }
-
-  /* ---------- οθόνη εκκίνησης: το iOS θέλει άγγιγμα για τα σένσορα ---------- */
   #gate {
     position: fixed; inset: 0; z-index: 40;
     display: flex; flex-direction: column; justify-content: flex-end;
-    padding: 32px;
-    padding-bottom: calc(32px + env(safe-area-inset-bottom));
+    padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom));
     background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%);
   }
   #gate h1 {
@@ -73,43 +76,19 @@
   }
   #startBtn[disabled] { opacity: .5; }
 
-  /* ---------- επικάλυψη ---------- */
-  #stage { position: fixed; inset: 0; z-index: 10; display: none; }
-  #stage.on { display: block; }
-
-  #labels { position: absolute; inset: 0; overflow: hidden; }
-
-  .marker {
-    position: absolute; transform: translate(-50%, -50%);
-    display: flex; align-items: stretch; text-align: left;
-    background: rgba(14,42,46,.9); color: var(--bone);
-    padding: 0; white-space: nowrap; max-width: 68vw;
-  }
-  .marker .bar { width: 5px; background: var(--chalk); flex: none; }
-  .marker .txt { padding: 9px 13px; overflow: hidden; }
-  .marker .t { display: block; font-weight: 600; font-size: 16px; }
-  .marker .d {
-    display: block; font-size: 13px; color: var(--sea-light);
-    font-variant-numeric: tabular-nums;
-  }
-  .marker.near { background: var(--bone); color: var(--ink); }
-  .marker.near .d { color: var(--sea); }
-  .marker.cardinal { background: rgba(14,42,46,.72); }
-  .marker.cardinal .bar { background: var(--sea); }
-
+  #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; display: none; }
+  #hud.on { display: block; }
   #status {
     position: absolute; top: calc(var(--pad) + env(safe-area-inset-top));
     left: var(--pad); right: var(--pad); padding: 9px 13px;
-    background: rgba(14,42,46,.92); font-size: 14px;
-    font-variant-numeric: tabular-nums;
+    background: rgba(14,42,46,.92); font-size: 14px; font-variant-numeric: tabular-nums;
   }
-
   #nearest {
     position: absolute; left: var(--pad); right: var(--pad);
     bottom: calc(var(--pad) + env(safe-area-inset-bottom));
-    display: none; width: calc(100% - var(--pad)*2); text-align: left;
-    padding: 15px 17px; background: var(--bone); color: var(--ink);
-    border-left: 5px solid var(--chalk);
+    pointer-events: auto; display: none; width: calc(100% - var(--pad)*2);
+    text-align: left; padding: 15px 17px; background: var(--bone);
+    color: var(--ink); border-left: 5px solid var(--chalk);
   }
   #nearest.on { display: block; }
   #nearest .dist {
@@ -118,11 +97,9 @@
   }
   #nearest .name { display: block; font-size: 19px; font-weight: 600; }
 
-  /* ---------- φύλλο αφήγησης ---------- */
   #sheet {
     position: fixed; inset: 0; z-index: 30; display: none;
-    flex-direction: column; justify-content: flex-end;
-    background: rgba(14,42,46,.55);
+    flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.55);
   }
   #sheet.on { display: flex; }
   #sheetInner {
@@ -143,18 +120,15 @@
 </head>
 <body>
 
-<video id="feed" playsinline muted autoplay></video>
-
 <div id="gate">
   <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
-  <p>Δύο δοκιμαστικά σημεία: Πλατεία Σαπφούς και Άγιος Θεράπων.</p>
+  <p>Τρία δοκιμαστικά σημεία, από 45 έως 215 μέτρα μεταξύ τους.</p>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn" type="button">Ξεκίνα τη διαδρομή</button>
 </div>
 
-<div id="stage">
-  <div id="labels"></div>
+<div id="hud">
   <div id="status" role="status" aria-live="polite">Αναμονή για στίγμα…</div>
   <button id="nearest" type="button">
     <span class="dist"></span><span class="name"></span>
@@ -171,320 +145,242 @@
   </div>
 </div>
 
+<div id="sceneHost"></div>
+
 <script>
 (function () {
   'use strict';
 
   /* ================================================================
      ΣΗΜΕΙΑ
-     Τα κείμενα είναι ΕΝΔΕΙΚΤΙΚΑ. Δεν είναι προφορικές μαρτυρίες.
+
+     Τα δύο πρώτα είναι δικά σου, από την περιοχή βόρεια της Πλατείας
+     Σαπφούς. Το τρίτο σημείο των αρχικών συντεταγμένων ήταν 6 μ. από
+     το πρώτο και αφαιρέθηκε: δεν διαχωρίζεται ποτέ με σφάλμα GPS
+     ±10-20 μ. Στη θέση του μπήκε η Πλατεία Σαπφούς, ~215 μ. νοτιότερα,
+     ώστε να δοκιμάζεται και μακρινή ετικέτα.
+
+     ΟΙ ΟΝΟΜΑΣΙΕΣ ΤΩΝ ΔΥΟ ΠΡΩΤΩΝ ΕΙΝΑΙ ΠΡΟΣΩΡΙΝΕΣ. Δεν ξέρω τι υπάρχει
+     ακριβώς σε αυτές τις συντεταγμένες — χρειάζεται επιτόπια
+     επαλήθευση.
+
+     ΤΑ ΚΕΙΜΕΝΑ ΕΙΝΑΙ ΔΟΚΙΜΑΣΤΙΚΑ. Δεν είναι προφορικές μαρτυρίες.
      Πραγματικό περιεχόμενο μόνο μέσα από τη συναίνεση του D1.6.
      ================================================================ */
   var STORIES = [
     {
-      id: 'mt-001',
-      title: 'Πλατεία Σαπφούς',
-      subtitle: 'Παραλιακή, κέντρο Μυτιλήνης',
-      lat: 39.1066446,
-      lon: 26.5574660,
-      radius: 40,
-      text: 'Δοκιμαστικό κείμενο για τον έλεγχο της ροής ανάγνωσης. Εδώ θα ' +
-            'εμφανιζόταν η αφήγηση που έχει συνδεθεί με το σημείο, μαζί με ' +
-            'τα μεταδεδομένα της και τον συντελεστή που την κατέθεσε.'
+      id: 'mt-001', title: 'Σημείο Α', subtitle: 'Ερμού, βόρειο τμήμα',
+      lat: 39.108553, lon: 26.556917, radius: 30,
+      text: 'Δοκιμαστικό κείμενο για τον έλεγχο της ροής ανάγνωσης. Εδώ ' +
+            'θα εμφανιζόταν η αφήγηση που έχει συνδεθεί με το σημείο, ' +
+            'μαζί με τα μεταδεδομένα της.'
     },
     {
-      id: 'mt-002',
-      title: 'Άγιος Θεράπων',
-      subtitle: 'Ερμού, παλιά αγορά',
-      lat: 39.1051514,
-      lon: 26.5547650,
-      radius: 40,
-      text: 'Δεύτερο δοκιμαστικό σημείο, περίπου 285 μέτρα από το πρώτο. Η ' +
-            'απόσταση επιλέχθηκε ώστε να ελέγχεται η συμπεριφορά των ' +
-            'ετικετών όταν το ένα σημείο είναι κοντά και το άλλο μακριά.'
+      id: 'mt-002', title: 'Σημείο Β', subtitle: 'Περίπου 47 μ. νότια',
+      lat: 39.108145, lon: 26.556762, radius: 30,
+      text: 'Δεύτερο δοκιμαστικό σημείο. Η απόσταση από το πρώτο είναι ' +
+            'αρκετή ώστε οι δύο ετικέτες να διαχωρίζονται σταθερά.'
+    },
+    {
+      id: 'mt-003', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή, ~215 μ. νότια',
+      lat: 39.1066446, lon: 26.5574660, radius: 40,
+      text: 'Μακρινό σημείο. Χρησιμεύει για να ελεγχθεί αν η ετικέτα ' +
+            'παραμένει ευανάγνωστη και σταθερή σε μεγάλη απόσταση.'
     }
   ];
 
-  /* Οριζόντιο οπτικό πεδίο της πίσω κάμερας, σε μοίρες. Τυπική τιμή για
-     κινητό. Αν οι ετικέτες πέφτουν σταθερά δεξιά ή αριστερά όταν το σημείο
-     είναι μπροστά σου, αυτός ο αριθμός θέλει βαθμονόμηση ανά συσκευή. */
-  var H_FOV = 65;
-  var V_FOV = 48;
-
-  var params    = new URLSearchParams(location.search);
-  var DEMO      = params.has('demo');
-  var CALIB     = params.has('calib');
+  var params = new URLSearchParams(location.search);
+  var SMOOTHING = parseFloat(params.get('k')) || 0.1;
+  var MIN_DIST  = parseFloat(params.get('d')) || 5;
 
   var $ = function (id) { return document.getElementById(id); };
-  var stage = $('stage'), labels = $('labels'), statusBar = $('status');
-  var nearestBtn = $('nearest'), sheet = $('sheet');
-
-  var heading = null;   // μοίρες, δεξιόστροφα από τον βορρά
-  var pitch   = 0;      // μοίρες πάνω/κάτω από τον ορίζοντα
-  var me      = null;   // {lat, lon, accuracy}
-  var nodes   = [];     // {data, el, isCardinal}
-  var lastFocus = null;
+  var me = null, lastFocus = null;
 
   /* ---------------------------------------------------------------- */
-  /* Γεωμετρία                                                        */
+  /* Απόσταση (haversine). Υπολογίζεται εδώ και όχι μέσα από το AR.js, */
+  /* ώστε το HUD να μην εξαρτάται από εσωτερικά της βιβλιοθήκης.       */
   /* ---------------------------------------------------------------- */
-  var rad = function (d) { return d * Math.PI / 180; };
-  var deg = function (r) { return r * 180 / Math.PI; };
-
   function distanceMetres(lat1, lon1, lat2, lon2) {
-    var R = 6371000;
+    var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
     var dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
     var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos(rad(lat1)) * Math.cos(rad(lat2)) *
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
-
-  function bearingDegrees(lat1, lon1, lat2, lon2) {
-    var dLon = rad(lon2 - lon1);
-    var y = Math.sin(dLon) * Math.cos(rad(lat2));
-    var x = Math.cos(rad(lat1)) * Math.sin(rad(lat2)) -
-            Math.sin(rad(lat1)) * Math.cos(rad(lat2)) * Math.cos(dLon);
-    return (deg(Math.atan2(y, x)) + 360) % 360;
-  }
-
-  /* Γωνία στο διάστημα [-180, 180] */
-  function normalise(a) {
-    a = (a + 180) % 360;
-    if (a < 0) a += 360;
-    return a - 180;
-  }
-
-  function formatDistance(m) {
+  function fmt(m) {
     return m < 1000 ? Math.round(m) + ' μ.' : (m / 1000).toFixed(1) + ' χλμ.';
   }
 
   /* ---------------------------------------------------------------- */
-  /* Πυξίδα                                                           */
+  /* Ετικέτα σε canvas — η προεπιλεγμένη γραμματοσειρά του a-text δεν  */
+  /* έχει ελληνικούς χαρακτήρες, οπότε τη ζωγραφίζουμε μόνοι μας.      */
   /* ---------------------------------------------------------------- */
-  function readHeading(e) {
-    // iOS: έτοιμο, δεξιόστροφα από τον μαγνητικό βορρά
-    if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
-      return e.webkitCompassHeading;
-    }
-    // Android: absolute alpha, αριστερόστροφα, οπότε αντιστρέφουμε
-    if (e.absolute === true && typeof e.alpha === 'number') {
-      return (360 - e.alpha) % 360;
-    }
-    return null;
-  }
+  function makeLabelCanvas(story) {
+    var W = 1024, H = 256, dpr = 2;
+    var c = document.createElement('canvas');
+    c.id = 'lbl-' + story.id;
+    c.className = 'labelsrc';
+    c.width = W * dpr; c.height = H * dpr;
+    var g = c.getContext('2d');
+    g.scale(dpr, dpr);
 
-  function screenAngle() {
-    if (screen.orientation && typeof screen.orientation.angle === 'number') {
-      return screen.orientation.angle;
-    }
-    return window.orientation || 0;
-  }
+    g.fillStyle = 'rgba(14,42,46,0.90)';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#F0C244';
+    g.fillRect(0, 0, 16, H);
 
-  function onOrientation(e) {
-    var h = readHeading(e);
-    if (h === null) return;
-    heading = (h + screenAngle()) % 360;
-    if (typeof e.beta === 'number') {
-      pitch = Math.max(-80, Math.min(80, e.beta - 90));
-    }
-    render();
-  }
+    g.fillStyle = '#F2EDE4';
+    g.font = '600 82px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
+    g.textBaseline = 'middle';
+    g.fillText(story.title, 52, H / 2 - 22);
 
-  function listenOrientation() {
-    // Το absolute event είναι ό,τι χρειαζόμαστε στο Android
-    window.addEventListener('deviceorientationabsolute', onOrientation, true);
-    window.addEventListener('deviceorientation', onOrientation, true);
+    g.fillStyle = '#8FC0C4';
+    g.font = '46px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
+    g.fillText(story.subtitle, 52, H / 2 + 52);
+
+    document.body.appendChild(c);
+    return c.id;
   }
 
   /* ---------------------------------------------------------------- */
-  /* Ετικέτες                                                         */
+  /* Κατασκευή σκηνής — μετά την άδεια, ποτέ στο load                  */
   /* ---------------------------------------------------------------- */
-  function buildNode(data, isCardinal) {
-    var el = document.createElement(isCardinal ? 'div' : 'button');
-    el.className = 'marker' + (isCardinal ? ' cardinal' : '');
-    if (!isCardinal) { el.type = 'button'; }
-    el.innerHTML = '<span class="bar"></span><span class="txt">' +
-                   '<span class="t"></span><span class="d"></span></span>';
-    el.querySelector('.t').textContent = data.title;
-    el.style.display = 'none';
-    if (!isCardinal) {
-      el.addEventListener('click', function () { openStory(data); });
-    }
-    labels.appendChild(el);
-    return { data: data, el: el, isCardinal: isCardinal };
-  }
+  function buildScene() {
+    var parts = [];
+    parts.push(
+      '<a-scene vr-mode-ui="enabled: false" embedded ' +
+      'loading-screen="enabled: false" ' +
+      'arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false" ' +
+      'renderer="antialias: true; alpha: true">'
+    );
 
-  function buildAll() {
-    labels.innerHTML = '';
-    nodes = STORIES.map(function (s) { return buildNode(s, false); });
-
-    if (CALIB && me) {
-      // Τέσσερα σημεία στα 60 μ., για να δεις αν η πυξίδα λέει αλήθεια
-      var d = 60 / 111320;
-      [['Βορράς', d, 0], ['Νότος', -d, 0],
-       ['Ανατολή', 0, d / Math.cos(rad(me.lat))],
-       ['Δύση', 0, -d / Math.cos(rad(me.lat))]
-      ].forEach(function (c) {
-        nodes.push(buildNode({
-          title: c[0], subtitle: '', text: '',
-          lat: me.lat + c[1], lon: me.lon + c[2], radius: 0
-        }, true));
-      });
-    }
-  }
-
-  function render() {
-    if (!me || heading === null) return;
-    var W = window.innerWidth, H = window.innerHeight;
-
-    nodes.forEach(function (n) {
-      var dist = distanceMetres(me.lat, me.lon, n.data.lat, n.data.lon);
-      var brg  = bearingDegrees(me.lat, me.lon, n.data.lat, n.data.lon);
-      var rel  = normalise(brg - heading);
-
-      // Εκτός οπτικού πεδίου, με λίγο περιθώριο ώστε να μπαινοβγαίνει ομαλά
-      if (Math.abs(rel) > H_FOV / 2 + 8) { n.el.style.display = 'none'; return; }
-
-      n.el.style.display = 'flex';
-      n.el.style.left = (50 + (rel / H_FOV) * 100) + '%';
-      n.el.style.top  = (50 + (pitch / V_FOV) * 100) + '%';
-
-      if (!n.isCardinal) {
-        n.el.querySelector('.d').textContent =
-          dist <= n.data.radius ? 'είσαι εδώ' : formatDistance(dist);
-        n.el.classList.toggle('near', dist <= n.data.radius);
-        n.el.setAttribute('aria-label',
-          n.data.title + ', ' + formatDistance(dist) + ' μακριά. Άνοιγμα αφήγησης.');
-      } else {
-        n.el.querySelector('.d').textContent = '60 μ.';
-      }
+    STORIES.forEach(function (s) {
+      var canvasId = makeLabelCanvas(s);
+      /* Το μέγεθος δίνεται σε μέτρα. Το AR.js δεν κλιμακώνει με την
+         απόσταση, οπότε το κάνουμε εμείς: μια ετικέτα στα 215 μ.
+         πρέπει να είναι πολύ μεγαλύτερη από μία στα 45 μ. για να
+         πιάνει παρόμοιο κομμάτι της οθόνης. Η κλίμακα ορίζεται στο
+         πρώτο στίγμα, μέσα στο onPosition(). */
+      parts.push(
+        '<a-entity class="poi" data-id="' + s.id + '" ' +
+        'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
+        'look-at="#cam" scale="4 1 1">' +
+          '<a-plane width="4" height="1" material="src: #' + canvasId +
+          '; transparent: true; shader: flat"></a-plane>' +
+        '</a-entity>'
+      );
     });
+
+    parts.push(
+      '<a-camera id="cam" ' +
+      'look-controls-enabled="false" ' +
+      'arjs-device-orientation-controls="smoothingFactor: ' + SMOOTHING + '" ' +
+      'gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"></a-camera>'
+    );
+    parts.push('</a-scene>');
+    $('sceneHost').innerHTML = parts.join('');
+  }
+
+  /* Κλιμάκωση ετικετών ανάλογα με την απόσταση, μία φορά */
+  var scaled = false;
+  function scaleLabels() {
+    if (scaled || !me) return;
+    STORIES.forEach(function (s) {
+      var el = document.querySelector('.poi[data-id="' + s.id + '"]');
+      if (!el) return;
+      var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
+      var k = Math.max(d, 25) * 0.10;
+      el.setAttribute('scale', (k * 4) + ' ' + k + ' 1');
+    });
+    scaled = true;
   }
 
   /* ---------------------------------------------------------------- */
-  /* Κατάσταση και κοντινότερο σημείο                                 */
+  /* HUD                                                              */
   /* ---------------------------------------------------------------- */
-  function updateStatus() {
-    if (!me) return;
-    var bits = [];
-    bits.push(me.accuracy ? 'στίγμα ±' + Math.round(me.accuracy) + ' μ.' : 'στίγμα —');
-    bits.push(heading === null ? 'πυξίδα —' : 'πυξίδα ' + Math.round(heading) + '°');
-    statusBar.textContent = bits.join('   ');
+  function onPosition(pos) {
+    me = {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      accuracy: pos.coords.accuracy
+    };
+    scaleLabels();
+
+    $('status').textContent =
+      'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
+      'εξομάλυνση ' + SMOOTHING + '   κατώφλι ' + MIN_DIST + ' μ.';
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
     }).sort(function (a, b) { return a.d - b.d; });
 
-    var c = ranked[0];
-    nearestBtn.querySelector('.dist').textContent =
-      c.d <= c.s.radius ? 'Είσαι εδώ' : formatDistance(c.d) + ' μακριά';
-    nearestBtn.querySelector('.name').textContent = c.s.title;
-    nearestBtn.classList.add('on');
-    nearestBtn.onclick = function () { openStory(c.s); };
+    var c = ranked[0], btn = $('nearest');
+    btn.querySelector('.dist').textContent =
+      c.d <= c.s.radius ? 'Είσαι εδώ' : fmt(c.d) + ' μακριά';
+    btn.querySelector('.name').textContent = c.s.title;
+    btn.classList.add('on');
+    btn.onclick = function () { openStory(c.s); };
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Φύλλο αφήγησης                                                   */
-  /* ---------------------------------------------------------------- */
   function openStory(s) {
     lastFocus = document.activeElement;
     $('sheetTitle').textContent = s.title;
-    sheet.querySelector('.sub').textContent = s.subtitle;
-    sheet.querySelector('.body').textContent = s.text;
-    sheet.classList.add('on');
+    $('sheet').querySelector('.sub').textContent = s.subtitle;
+    $('sheet').querySelector('.body').textContent = s.text;
+    $('sheet').classList.add('on');
     $('closeBtn').focus();
   }
   $('closeBtn').addEventListener('click', function () {
-    sheet.classList.remove('on');
+    $('sheet').classList.remove('on');
     if (lastFocus) lastFocus.focus();
   });
 
   /* ---------------------------------------------------------------- */
   /* Εκκίνηση                                                         */
   /* ---------------------------------------------------------------- */
-  function fail(msg) {
-    $('gate').style.display = 'flex';
-    var b = $('startBtn');
-    b.disabled = false;
-    b.textContent = 'Δοκίμασε ξανά';
-    $('gate').querySelector('p').textContent = msg;
-  }
-
   $('startBtn').addEventListener('click', function () {
     var btn = $('startBtn');
     btn.disabled = true;
     btn.textContent = 'Άνοιγμα κάμερας…';
 
-    // Στο iOS η άδεια αισθητήρων ΠΡΕΠΕΙ να ζητηθεί μέσα στη χειρονομία.
-    var sensorPermission =
-      (window.DeviceOrientationEvent &&
-       typeof DeviceOrientationEvent.requestPermission === 'function')
-        ? DeviceOrientationEvent.requestPermission()
-        : Promise.resolve('granted');
+    /* iOS 13+: η άδεια αισθητήρων πρέπει να ζητηθεί ΜΕΣΑ στη χειρονομία.
+       Αν παραλειφθεί, η κάμερα ανοίγει αλλά οι ετικέτες μένουν παγωμένες
+       — και μοιάζει με σφάλμα GPS ενώ δεν είναι. */
+    var perm = (window.DeviceOrientationEvent &&
+                typeof DeviceOrientationEvent.requestPermission === 'function')
+      ? DeviceOrientationEvent.requestPermission()
+      : Promise.resolve('granted');
 
-    sensorPermission
-      .then(function (state) {
-        if (state !== 'granted') {
-          throw new Error('Δεν δόθηκε άδεια για τους αισθητήρες κίνησης.');
-        }
-        return navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false
-        });
-      })
-      .then(function (stream) {
-        var v = $('feed');
-        v.srcObject = stream;
-        return v.play();
-      })
-      .then(function () {
-        $('gate').style.display = 'none';
-        stage.classList.add('on');
-        listenOrientation();
+    perm.then(function (state) {
+      if (state !== 'granted') {
+        throw new Error('Δεν δόθηκε άδεια για τους αισθητήρες κίνησης.');
+      }
+      buildScene();
+      $('gate').style.display = 'none';
+      $('hud').classList.add('on');
 
-        if (DEMO) {
-          me = { lat: 39.10555, lon: 26.55600, accuracy: null };
-          statusBar.textContent = 'Λειτουργία γραφείου — ψεύτικο στίγμα';
-          buildAll(); updateStatus(); render();
-          return;
-        }
-
-        if (!navigator.geolocation) {
-          statusBar.textContent = 'Η συσκευή δεν δίνει τοποθεσία.';
-          return;
-        }
-
-        navigator.geolocation.watchPosition(
-          function (pos) {
-            var first = !me;
-            me = {
-              lat: pos.coords.latitude,
-              lon: pos.coords.longitude,
-              accuracy: pos.coords.accuracy
-            };
-            if (first) buildAll();
-            updateStatus();
-            render();
-          },
-          function (err) {
-            statusBar.textContent =
-              'Δεν βρέθηκε στίγμα (κωδικός ' + err.code + '). Βγες σε ανοιχτό χώρο.';
-          },
-          { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 }
-        );
-      })
-      .catch(function (e) {
-        fail('Δεν ξεκίνησε: ' + (e.message || e) +
-             ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια ' +
-             'για κάμερα, τοποθεσία και αισθητήρες.');
-      });
+      if (!navigator.geolocation) {
+        $('status').textContent = 'Η συσκευή δεν δίνει τοποθεσία.';
+        return;
+      }
+      navigator.geolocation.watchPosition(
+        onPosition,
+        function (err) {
+          $('status').textContent =
+            'Δεν βρέθηκε στίγμα (κωδικός ' + err.code + '). Βγες σε ανοιχτό χώρο.';
+        },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 }
+      );
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = 'Δοκίμασε ξανά';
+      $('gate').querySelector('p').textContent =
+        'Δεν ξεκίνησε: ' + (e.message || e) +
+        ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια για ' +
+        'κάμερα, τοποθεσία και αισθητήρες.';
+    });
   });
-
-  window.addEventListener('resize', render);
-  if (screen.orientation) {
-    screen.orientation.addEventListener('change', render);
-  }
 })();
 </script>
 </body>
