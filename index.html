@@ -32,6 +32,8 @@
   ΠΑΡΑΜΕΤΡΟΙ URL
     ?k=0.2   αλλάζει το smoothingFactor για σύγκριση στο πεδίο
     ?d=2     αλλάζει το gpsMinDistance σε μέτρα
+    ?y=0.9   ανεβάζει τις ετικέτες. 0 = ύψος εδάφους, 0.55 = προεπιλογή,
+             αρνητική τιμή τις κατεβάζει
     ?debug   δείχνει πόσες ετικέτες μπήκαν στη σκηνή
 
   ΧΑΡΤΗΣ
@@ -245,6 +247,12 @@
   var params = new URLSearchParams(location.search);
   var SMOOTHING = parseFloat(params.get('k')) || 0.1;
   var MIN_DIST  = parseFloat(params.get('d')) || 5;
+  /* Κατακόρυφη μετατόπιση ετικέτας, σε τοπικές μονάδες του επιπέδου
+     (ύψος επιπέδου = 1). Επειδή η κλίμακα k είναι ανάλογη της
+     απόστασης, η μετατόπιση παραμένει σταθερή ΣΕ ΓΩΝΙΑ: μια ετικέτα
+     στα 100 μ. και μια στα 585 μ. ανεβαίνουν το ίδιο στην οθόνη.
+     0.55 ~ 3 μοίρες πάνω από τον ορίζοντα. */
+  var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 0.55;
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
@@ -277,6 +285,9 @@
       if (!cam) { return; }
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
+      /* Στρέφουμε ΜΟΝΟ γύρω από τον κατακόρυφο άξονα: κρατάμε το y της
+         κάμερας ίσο με το δικό μας, ώστε η ετικέτα να μη γέρνει προς τα
+         πίσω όταν την κοιτάς από κοντά. */
       o.lookAt(_camPos.x, o.position.y, _camPos.z);
     }
   });
@@ -329,7 +340,7 @@
         '<a-entity class="poi" data-id="' + s.id + '" ' +
         'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
         'billboard scale="5 5 1">' +
-          '<a-plane width="3" height="1" ' +
+          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" ' +
           'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
           '</a-plane>' +
         '</a-entity>'
@@ -489,7 +500,7 @@
     $('status').textContent =
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
       'πυξίδα ' + (heading === null ? '—' : Math.round(heading) + '°') +
-      '   εξομάλυνση ' + SMOOTHING + dbg;
+      '   εξομάλυνση ' + SMOOTHING + '   ύψος ' + Y_OFF + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
