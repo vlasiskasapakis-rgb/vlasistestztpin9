@@ -9,43 +9,6 @@
   WALKING MEMORY (GA 101288157) — spike για το Task 4.2.
   Ένα αρχείο. Ανεβάζεις σε GitHub Pages και παίζει.
 
-  ΤΙ ΔΙΟΡΘΩΘΗΚΕ ΣΕ ΣΧΕΣΗ ΜΕ ΤΗΝ ΠΡΟΗΓΟΥΜΕΝΗ ΕΚΔΟΣΗ
-
-  1. Νέα location-based components: gps-new-camera / gps-new-entity-place
-     αντί για τα παλιά gps-camera / gps-entity-place.
-  2. gpsMinDistance: 5 — η κάμερα δεν επανατοποθετείται μέχρι να
-     μετακινηθείς 5 μ. Κόβει το πήδημα από την ανακρίβεια του GPS.
-  3. arjs-device-orientation-controls smoothingFactor: 0.1 — εκθετική
-     εξομάλυνση των αισθητήρων. Το look-controls-enabled="false" είναι
-     υποχρεωτικό: το component αντικαθιστά τα look-controls του A-Frame.
-  4. Κλειδωμένες εκδόσεις (AR.js 3.4.7) αντί για master.
-  5. aframe-ar.js αντί για aframe-ar-nft.js — το NFT είναι image tracking
-     και δεν χρησιμοποιείται εδώ.
-  6. Κουμπί εκκίνησης. Στο iOS το DeviceOrientationEvent.requestPermission()
-     ΠΡΕΠΕΙ να κληθεί μέσα σε χειρονομία χρήστη.
-  7. Καθόλου εξωτερικά αρχεία εικόνας. Οι ετικέτες ζωγραφίζονται σε canvas,
-     ώστε να αποδίδονται σωστά τα ελληνικά — η προεπιλεγμένη γραμματοσειρά
-     του a-text δεν έχει ελληνικούς χαρακτήρες.
-  8. Τα σημεία απομακρύνθηκαν μεταξύ τους. Δύο σημεία στα 6 μ. δεν
-     διαχωρίζονται ποτέ με σφάλμα GPS ±10-20 μ.
-
-  ΠΑΡΑΜΕΤΡΟΙ URL
-    ?k=0.2   αλλάζει το smoothingFactor για σύγκριση στο πεδίο
-    ?d=2     αλλάζει το gpsMinDistance σε μέτρα
-    ?y=0.9   ανεβάζει τις ετικέτες. 0 = ύψος εδάφους, 0.55 = προεπιλογή,
-             αρνητική τιμή τις κατεβάζει
-    ?cal=-12 επιβάλλει διόρθωση πυξίδας και παρακάμπτει την αποθηκευμένη.
-             Κανονικά δεν χρειάζεται: βαθμονομείται μόνη της όταν
-             περπατάς και η τιμή αποθηκεύεται στη συσκευή.
-    ?debug   δείχνει πόσες ετικέτες μπήκαν και τις ακατέργαστες τιμές
-
-  ΧΑΡΤΗΣ
-    Leaflet 1.9.4 + πλακίδια OpenStreetMap, σε συρόμενο φύλλο. Κλειστό
-    αφήνει μόνο τη λαβή, οπότε η κάμερα μένει ακάλυπτη. Σύρε τη λαβή
-    πάνω ή πάτησέ την.
-    Ο κύκλος γύρω από τη θέση σου είναι το σφάλμα του GPS — χρήσιμος
-    δείκτης όταν καταγράφεις μετρήσεις στο πεδίο.
-
   ΑΠΑΙΤΕΙ HTTPS.
 -->
 
@@ -100,11 +63,6 @@
     left: var(--pad); right: var(--pad); padding: 9px 13px;
     background: rgba(14,42,46,.92); font-size: 14px; font-variant-numeric: tabular-nums;
   }
-  /* Ο χάρτης είναι συρόμενο φύλλο. Κλειστός αφήνει μόνο τη λαβή, ώστε
-     η κάμερα να μένει ακάλυπτη. Η σκηνή AR είναι έτσι κι αλλιώς σε
-     πλήρη οθόνη από κάτω — ο χάρτης δεν τη σμικρύνει ποτέ, γιατί το
-     A-Frame δεν ξαναϋπολογίζει την αναλογία και οι ετικέτες θα
-     έπεφταν σε λάθος σημείο. */
   #drawer {
     position: fixed; left: 0; right: 0; bottom: 0; height: 52%;
     z-index: 15; display: flex; flex-direction: column;
@@ -144,9 +102,6 @@
     background: rgba(14,42,46,.92); color: var(--bone);
     display: flex; align-items: center; justify-content: center;
   }
-  /* Η βελόνα περιστρέφεται γύρω από το ΚΕΝΤΡΟ του κύκλου. Πριν, το
-     transform-origin ήταν μέσα στο κουτί του ίδιου του τριγώνου, οπότε
-     η βελόνα έφευγε εκτός κέντρου καθώς γύριζε. */
   #compass .needle {
     position: absolute; inset: 0; transform-origin: 50% 50%;
   }
@@ -167,27 +122,6 @@
     font-size: 10px; font-variant-numeric: tabular-nums; color: #8FC0C4;
   }
 
-  /* Δείκτης θέσης με κώνο κατεύθυνσης. Ο κώνος έχει την κορυφή του
-     πάνω στην κουκκίδα και ανοίγει προς τα εκεί που κοιτάς. */
-  #calBtn {
-    position: absolute; top: calc(var(--handle) + 10px); left: 10px; z-index: 500;
-    padding: 9px 12px; background: rgba(14,42,46,.92); color: var(--bone);
-    font-size: 13px;
-  }
-  #calPanel {
-    position: absolute; inset: var(--handle) 0 0 0; z-index: 600;
-    display: none; flex-direction: column; justify-content: center;
-    padding: var(--pad); background: rgba(14,42,46,.96);
-  }
-  #calPanel.on { display: flex; }
-  #calPanel p { margin: 0 0 14px; font-size: 15px; color: #B9CFD1; max-width: 44ch; }
-  #calPanel button {
-    display: block; width: 100%; margin-bottom: 9px; padding: 13px;
-    background: var(--bone); color: var(--ink); font-size: 16px;
-    font-weight: 600; text-align: left;
-  }
-  #calPanel button.ghost { background: transparent; color: #8FC0C4; font-weight: 400; }
-
   .me-wrap { position: relative; width: 56px; height: 56px; }
   .me-rot  { position: absolute; inset: 0; transform-origin: 50% 50%; }
   .me-cone {
@@ -196,11 +130,8 @@
     border-left: 17px solid transparent;
     border-right: 17px solid transparent;
     border-top: 30px solid rgba(240, 194, 68, 0.88);
-    /* Περίγραμμα σε σκούρο, ώστε ο κώνος να ξεχωρίζει και πάνω από
-       ανοιχτόχρωμα πλακίδια του χάρτη, όχι μόνο πάνω από σκούρα. */
     filter: drop-shadow(0 0 2px rgba(14, 42, 46, 0.95));
   }
-  /* Χωρίς έγκυρη πυξίδα δεν δείχνουμε κατεύθυνση που δεν ξέρουμε. */
   .me-rot.unknown .me-cone { display: none; }
   .me-dot {
     position: absolute; left: 50%; top: 50%;
@@ -276,14 +207,6 @@
     <span class="hint">σύρε πάνω</span>
   </button>
   <div id="map" aria-label="Χάρτης διαδρομής">
-    <button id="calBtn" type="button">Βαθμονόμηση</button>
-    <div id="calPanel">
-      <p>Βαθμονομείται μόνη της όταν περπατάς ευθεία. Αν βιάζεσαι ή δεν
-      μπορείς να περπατήσεις, στόχευσε ένα σημείο που βλέπεις και πάτησέ το.</p>
-      <div id="calList"></div>
-      <button class="ghost" id="calReset" type="button">Μηδενισμός και νέα αυτόματη</button>
-      <button class="ghost" id="calCancel" type="button">Άκυρο</button>
-    </div>
     <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
   </div>
 </div>
@@ -303,22 +226,6 @@
 (function () {
   'use strict';
 
-  /* ================================================================
-     ΣΗΜΕΙΑ
-
-     Τα δύο πρώτα είναι δικά σου, από την περιοχή βόρεια της Πλατείας
-     Σαπφούς. Το τρίτο σημείο των αρχικών συντεταγμένων ήταν 6 μ. από
-     το πρώτο και αφαιρέθηκε: δεν διαχωρίζεται ποτέ με σφάλμα GPS
-     ±10-20 μ. Στη θέση του μπήκε η Πλατεία Σαπφούς, ~215 μ. νοτιότερα,
-     ώστε να δοκιμάζεται και μακρινή ετικέτα.
-
-     ΟΙ ΟΝΟΜΑΣΙΕΣ ΤΩΝ ΔΥΟ ΠΡΩΤΩΝ ΕΙΝΑΙ ΠΡΟΣΩΡΙΝΕΣ. Δεν ξέρω τι υπάρχει
-     ακριβώς σε αυτές τις συντεταγμένες — χρειάζεται επιτόπια
-     επαλήθευση.
-
-     ΤΑ ΚΕΙΜΕΝΑ ΕΙΝΑΙ ΔΟΚΙΜΑΣΤΙΚΑ. Δεν είναι προφορικές μαρτυρίες.
-     Πραγματικό περιεχόμενο μόνο μέσα από τη συναίνεση του D1.6.
-     ================================================================ */
   var STORIES = [
     {
       id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
@@ -345,15 +252,8 @@
   var params = new URLSearchParams(location.search);
   var SMOOTHING = parseFloat(params.get('k')) || 0.1;
   var MIN_DIST  = parseFloat(params.get('d')) || 5;
-  /* Κατακόρυφη μετατόπιση ετικέτας, σε τοπικές μονάδες του επιπέδου
-     (ύψος επιπέδου = 1). Επειδή η κλίμακα k είναι ανάλογη της
-     απόστασης, η μετατόπιση παραμένει σταθερή ΣΕ ΓΩΝΙΑ: μια ετικέτα
-     στα 100 μ. και μια στα 585 μ. ανεβαίνουν το ίδιο στην οθόνη.
-     0.55 ~ 3 μοίρες πάνω από τον ορίζοντα. */
   var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 0.55;
-  /* Σταθερή διόρθωση πυξίδας σε μοίρες. Κάποιες συσκευές δίνουν τον
-     βορρά στραβά κατά σταθερή γωνία — τεκμηριωμένο ζήτημα του AR.js.
-     Βρες την τιμή με το κουμπί βαθμονόμησης και βάλ' την εδώ. */
+
   var CAL_KEY = 'wm-compass-cal';
   function loadCal() {
     if (params.has('cal')) { return parseFloat(params.get('cal')) || 0; }
@@ -361,24 +261,19 @@
       var v = window.localStorage.getItem(CAL_KEY);
       return v === null ? null : parseFloat(v);
     } catch (e) {
-      return null;   // ιδιωτική περιήγηση ή αποκλεισμένη αποθήκευση
+      return null;
     }
   }
   function saveCal(v) {
     try { window.localStorage.setItem(CAL_KEY, String(v)); } catch (e) { /* αδιάφορο */ }
   }
-  /* null σημαίνει «δεν έχει βαθμονομηθεί ποτέ» — διαφορετικό από 0,
-     που σημαίνει «μετρήθηκε και βγήκε μηδέν». */
+
   var CAL = loadCal();
   var calAuto = (CAL === null);
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
 
-  /* ---------------------------------------------------------------- */
-  /* Απόσταση (haversine). Υπολογίζεται εδώ και όχι μέσα από το AR.js, */
-  /* ώστε το HUD να μην εξαρτάται από εσωτερικά της βιβλιοθήκης.       */
-  /* ---------------------------------------------------------------- */
   function distanceMetres(lat1, lon1, lat2, lon2) {
     var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
     var dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
@@ -391,11 +286,6 @@
     return m < 1000 ? Math.round(m) + ' μ.' : (m / 1000).toFixed(1) + ' χλμ.';
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Billboard: στρέφει την ετικέτα προς την κάμερα, μόνο γύρω από τον */
-  /* κατακόρυφο άξονα ώστε να μη γέρνει. Έξι γραμμές αντί για εξωτερικό */
-  /* component — μία εξάρτηση και μία ασυμβατότητα εκδόσεων λιγότερη.  */
-  /* ---------------------------------------------------------------- */
   var _camPos = new THREE.Vector3();
   AFRAME.registerComponent('billboard', {
     tick: function () {
@@ -403,19 +293,10 @@
       if (!cam) { return; }
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
-      /* Στρέφουμε ΜΟΝΟ γύρω από τον κατακόρυφο άξονα: κρατάμε το y της
-         κάμερας ίσο με το δικό μας, ώστε η ετικέτα να μη γέρνει προς τα
-         πίσω όταν την κοιτάς από κοντά. */
       o.lookAt(_camPos.x, o.position.y, _camPos.z);
     }
   });
 
-  /* ---------------------------------------------------------------- */
-  /* Ετικέτα: ζωγραφίζεται σε canvas και περνάει ως <img> με data URL. */
-  /* Η προεπιλεγμένη γραμματοσειρά του a-text δεν έχει ελληνικά, και   */
-  /* ένα <img> είναι πιο αξιόπιστη πηγή texture από έναν ζωντανό       */
-  /* canvas.                                                          */
-  /* ---------------------------------------------------------------- */
   function makeLabelImage(story) {
     var W = 900, H = 300, dpr = 2;
     var c = document.createElement('canvas');
@@ -445,15 +326,10 @@
     return img.id;
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Κατασκευή σκηνής — μετά την άδεια, ποτέ στο load                  */
-  /* ---------------------------------------------------------------- */
   function buildScene() {
     var parts = [];
     STORIES.forEach(function (s) {
       var imgId = makeLabelImage(s);
-      /* Αρχική κλίμακα ώστε να φαίνεται κάτι πριν έρθει το πρώτο
-         στίγμα. Διορθώνεται στο scaleLabels(). */
       parts.push(
         '<a-entity class="poi" data-id="' + s.id + '" ' +
         'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
@@ -471,9 +347,6 @@
       'gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"></a-camera>'
     );
 
-    /* Χωρίς embedded, και προσαρτάται απευθείας στο <body>. Με embedded
-       μέσα σε container χωρίς ύψος, ο καμβάς βγαίνει 0 pixels και δεν
-       φαίνεται τίποτα — η κάμερα ανοίγει κανονικά, που παραπλανά. */
     var scene = document.createElement('a-scene');
     scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('loading-screen', 'enabled: false');
@@ -483,7 +356,6 @@
     document.body.appendChild(scene);
   }
 
-  /* Κλιμάκωση ετικετών ανάλογα με την απόσταση, μία φορά */
   var scaled = false;
   function scaleLabels() {
     if (scaled || !me) return;
@@ -491,22 +363,12 @@
       var el = document.querySelector('.poi[data-id="' + s.id + '"]');
       if (!el) return;
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
-      /* Η αναλογία 3:1 είναι ΗΔΗ μέσα στο <a-plane width="3" height="1">.
-         Η κλίμακα πρέπει να είναι ομοιόμορφη, αλλιώς πολλαπλασιάζεται
-         δεύτερη φορά και η ετικέτα βγαίνει τριπλάσια σε πλάτος. */
       var k = Math.max(d, 25) * 0.09;
       el.setAttribute('scale', k + ' ' + k + ' 1');
     });
     scaled = true;
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Χάρτης OpenStreetMap                                              */
-  /* Τα πλακίδια έρχονται από τους δημόσιους διακομιστές του OSM. Για   */
-  /* spike είναι εντάξει· για δημόσια εφαρμογή με πραγματικό φορτίο     */
-  /* χρειάζεται δικός σας ή εμπορικός πάροχος, και η απόδοση           */
-  /* δικαιωμάτων στο κάτω δεξιά ΔΕΝ αφαιρείται.                        */
-  /* ---------------------------------------------------------------- */
   var map = null, meMarker = null, accCircle = null, followMe = true;
 
   function initMap() {
@@ -530,8 +392,6 @@
       }).addTo(map).on('click', function () { openStory(s); });
     });
 
-    /* Μόλις ο χρήστης σύρει τον χάρτη, σταματάμε να τον
-       επανακεντράρουμε — αλλιώς δεν μπορεί να δει τη διαδρομή. */
     map.on('dragstart', function () { followMe = false; });
   }
 
@@ -562,29 +422,8 @@
     if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Βαθμονόμηση πυξίδας                                               */
-  /* Στοχεύεις ένα σημείο που ξέρεις πού είναι. Ξέρουμε την πραγματική */
-  /* του διόπτευση από τις συντεταγμένες, ξέρουμε τι λέει ο αισθητήρας */
-  /* — η διαφορά είναι η σταθερή απόκλιση της συσκευής.                */
-  /* ---------------------------------------------------------------- */
-  function bearingTo(lat1, lon1, lat2, lon2) {
-    var r = function (d) { return d * Math.PI / 180; };
-    var dLon = r(lon2 - lon1);
-    var y = Math.sin(dLon) * Math.cos(r(lat2));
-    var x = Math.cos(r(lat1)) * Math.sin(r(lat2)) -
-            Math.sin(r(lat1)) * Math.cos(r(lat2)) * Math.cos(dLon);
-    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-  }
-
-  /* ---------------------------------------------------------------- */
-  /* Αυτόματη βαθμονόμηση, χωρίς να στοχεύσεις τίποτα                   */
-  /* Όταν περπατάς, το GPS δίνει την κατεύθυνση της πορείας σου ως      */
-  /* πραγματική διόπτευση. Η διαφορά της από την ένδειξη της πυξίδας    */
-  /* είναι η απόκλιση της συσκευής. Χρειάζεται μόνο ευθύ βάδισμα.       */
-  /* ---------------------------------------------------------------- */
-  var AUTO_MIN_SPEED = 1.2;   // μ./δευτ. — πιο αργά η πορεία είναι θόρυβος
-  var AUTO_MAX_ACC   = 30;    // μ. — χειρότερο στίγμα δεν εμπιστευόμαστε
+  var AUTO_MIN_SPEED = 1.2;
+  var AUTO_MAX_ACC   = 30;
   var AUTO_SAMPLES   = 8;
   var sumSin = 0, sumCos = 0, nSamples = 0;
 
@@ -595,8 +434,7 @@
     if (coords.accuracy > AUTO_MAX_ACC) { return; }
 
     var off = ((coords.heading - rawHeading + 540) % 360) - 180;
-    /* Κυκλικός μέσος όρος: ο αριθμητικός θα έσπαγε στο πέρασμα
-       από τις 359 στη 1 μοίρα. */
+    
     sumSin += Math.sin(off * Math.PI / 180);
     sumCos += Math.cos(off * Math.PI / 180);
     nSamples++;
@@ -617,50 +455,6 @@
       : '   περπάτα ευθεία για βαθμονόμηση';
   }
 
-  function initCalibration() {
-    var panel = $('calPanel'), list = $('calList');
-
-    STORIES.forEach(function (s) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = s.title;
-      b.addEventListener('click', function () {
-        if (!me || rawHeading === null) {
-          $('status').textContent = 'Χρειάζεται στίγμα και πυξίδα πρώτα.';
-          panel.classList.remove('on');
-          return;
-        }
-        var trueB = bearingTo(me.lat, me.lon, s.lat, s.lon);
-        /* Κανονικοποίηση στο [-180, 180] ώστε να μη βγει π.χ. 340 αντί
-           για -20 — η μεγάλη τιμή θα ήταν σωστή αλλά δυσανάγνωστη. */
-        var off = ((trueB - rawHeading + 540) % 360) - 180;
-        CAL = Math.round(off * 10) / 10;
-        calAuto = false;
-        saveCal(CAL);
-        panel.classList.remove('on');
-        $('status').textContent =
-          'Διόρθωση ' + (CAL > 0 ? '+' : '') + CAL + '° — αποθηκεύτηκε';
-        applyHeadingToDot();
-      });
-      list.appendChild(b);
-    });
-
-    $('calBtn').addEventListener('click', function () { panel.classList.add('on'); });
-    $('calCancel').addEventListener('click', function () { panel.classList.remove('on'); });
-    $('calReset').addEventListener('click', function () {
-      CAL = null; calAuto = true;
-      sumSin = 0; sumCos = 0; nSamples = 0;
-      try { window.localStorage.removeItem(CAL_KEY); } catch (e) { /* αδιάφορο */ }
-      panel.classList.remove('on');
-      $('status').textContent = 'Μηδενίστηκε. Περπάτα ευθεία λίγα δευτερόλεπτα.';
-      applyHeadingToDot();
-    });
-  }
-
-  /* Στρέφει τον κώνο του δείκτη. Ο χάρτης είναι προσανατολισμένος με
-     τον βορρά πάνω, οπότε ο κώνος γυρίζει κατά +heading — αντίθετα από
-     τη βελόνα της πυξίδας, που δείχνει τον βορρά και γυρίζει κατά
-     -heading. */
   function applyHeadingToDot() {
     if (!meMarker) { return; }
     var elm = meMarker.getElement();
@@ -672,12 +466,6 @@
     rot.style.transform = 'rotate(' + heading + 'deg)';
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Συρόμενο φύλλο                                                    */
-  /* Το Leaflet υπολογίζει το μέγεθος του καμβά μία φορά. Αν αλλάξει   */
-  /* το ορατό ύψος χωρίς invalidateSize(), τα πλακίδια βγαίνουν        */
-  /* μισοφορτωμένα και ο δείκτης θέσης πέφτει εκτός κέντρου.           */
-  /* ---------------------------------------------------------------- */
   function setDrawer(open) {
     var d = $('drawer'), hd = $('handle');
     d.classList.toggle('open', open);
@@ -712,26 +500,20 @@
     hd.addEventListener('pointerup', function (e) {
       if (startY === null) { return; }
       var dy = e.clientY - startY;
-      if (Math.abs(dy) > 24) { setDrawer(dy < 0); }   // πάνω = άνοιγμα
+      if (Math.abs(dy) > 24) { setDrawer(dy < 0); }
       startY = null;
     });
-
-    /* Πληκτρολόγιο: το <button> καλύπτεται ήδη από το click. */
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Πυξίδα — διαβάζεται ξεχωριστά από το AR.js, ώστε ο δείκτης του    */
-  /* χάρτη να μην εξαρτάται από εσωτερικά της βιβλιοθήκης.            */
-  /* ---------------------------------------------------------------- */
   var heading = null;
   var needle = null, degOut = null;
 
   function readHeading(e) {
     if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
-      return e.webkitCompassHeading;            // iOS, ήδη από τον βορρά
+      return e.webkitCompassHeading;
     }
     if (e.absolute === true && typeof e.alpha === 'number') {
-      return (360 - e.alpha) % 360;             // Android, αντίστροφη φορά
+      return (360 - e.alpha) % 360;
     }
     return null;
   }
@@ -762,7 +544,6 @@
       needle = document.querySelector('#compass .needle');
       degOut = document.querySelector('#compass .deg');
     }
-    /* Η βελόνα δείχνει τον βορρά, οπότε γυρίζει αντίθετα από εσένα. */
     needle.style.transform = 'rotate(' + (-heading) + 'deg)';
     degOut.textContent = Math.round(heading) + '°';
     applyHeadingToDot();
@@ -773,9 +554,6 @@
     window.addEventListener('deviceorientation', onOrientation, true);
   }
 
-  /* ---------------------------------------------------------------- */
-  /* HUD                                                              */
-  /* ---------------------------------------------------------------- */
   function onPosition(pos) {
     me = {
       lat: pos.coords.latitude,
@@ -820,17 +598,11 @@
     if (lastFocus) lastFocus.focus();
   });
 
-  /* ---------------------------------------------------------------- */
-  /* Εκκίνηση                                                         */
-  /* ---------------------------------------------------------------- */
   $('startBtn').addEventListener('click', function () {
     var btn = $('startBtn');
     btn.disabled = true;
     btn.textContent = 'Άνοιγμα κάμερας…';
 
-    /* iOS 13+: η άδεια αισθητήρων πρέπει να ζητηθεί ΜΕΣΑ στη χειρονομία.
-       Αν παραλειφθεί, η κάμερα ανοίγει αλλά οι ετικέτες μένουν παγωμένες
-       — και μοιάζει με σφάλμα GPS ενώ δεν είναι. */
     var perm = (window.DeviceOrientationEvent &&
                 typeof DeviceOrientationEvent.requestPermission === 'function')
       ? DeviceOrientationEvent.requestPermission()
@@ -845,7 +617,6 @@
       $('hud').classList.add('on');
       initMap();
       initDrawer();
-      initCalibration();
       listenHeading();
 
       if (!navigator.geolocation) {
