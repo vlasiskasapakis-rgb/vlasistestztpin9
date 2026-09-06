@@ -7,13 +7,16 @@
 
 <!--
   WALKING MEMORY (GA 101288157) — spike για το Task 4.2.
-  Ένα αρχείο. Ανεβάζεις σε GitHub Pages και παίζει.
-
-  ΑΠΑΙΤΕΙ HTTPS.
+  ΑΠΑΙΤΕΙ HTTPS. Προστέθηκε MarkerCluster για χάρτη & δυναμικό AR Cluster.
 -->
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Φόρτωση του πρόσθετου MarkerCluster για τον χάρτη -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
@@ -96,6 +99,20 @@
   }
   .leaflet-control-attribution a { color: var(--chalk) !important; }
 
+  /* Στυλ για τα clusters στον χάρτη */
+  .map-cluster-dot {
+    background: var(--sea);
+    color: var(--bone);
+    border: 3px solid var(--ink);
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+  }
+
   #compass {
     position: absolute; top: calc(var(--handle) + 10px); right: 10px; z-index: 500;
     width: 54px; height: 54px; border-radius: 50%;
@@ -141,7 +158,7 @@
   }
   .poi-dot {
     width: 13px; height: 13px; border-radius: 50%;
-    background: var(--bone); border: 3px solid var(--sea);
+    background: var(--bone); border: 3px solid var(--chalk);
   }
 
   #nearest {
@@ -188,7 +205,7 @@
 <div id="gate">
   <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
-  <p>10 Σημεία δοκιμής στο κέντρο της Μυτιλήνης.</p>
+  <p>10 Σημεία με δυναμική ομαδοποίηση (Clusters).</p>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn" type="button">Ξεκίνα τη διαδρομή</button>
 </div>
@@ -225,7 +242,6 @@
 (function () {
   'use strict';
 
-  // 10 Σημεία στο κέντρο της Μυτιλήνης
   var STORIES = [
     {
       id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
@@ -253,22 +269,24 @@
       text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.'
     },
       {
-      id: 'faneromni', title: 'Παναγια Φανερωμένη', subtitle: 'Ερμού',
+      id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού',
       lat: 39.110015, lon: 26.558099, radius: 40,  
-      text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.'
+      text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.'
     }
   ];
 
   var params = new URLSearchParams(location.search);
   var SMOOTHING = parseFloat(params.get('k')) || 0.1;
   var MIN_DIST  = parseFloat(params.get('d')) || 5;
-  // Αυξήθηκε από 0.55 σε 1.2 για να φαίνονται οι ετικέτες ψηλότερα
   var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 1.2;
+
+  // Μεταβλητές για το Cluster στο AR
+  var AR_CLUSTERS = [];
+  var CLUSTER_RADIUS_M = 50; // Απόσταση μεταξύ σημείων για να γίνουν ομάδα
+  var CLUSTER_REVEAL_M = 80; // Αν πλησιάσεις πιο κοντά, η ομάδα ανοίγει
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
-
-  // Η καθολική μεταβλητή για την κατεύθυνση, την οποία υπολογίζει πλέον η 3D κάμερα
   window.currentHeading = null;
 
   function distanceMetres(lat1, lon1, lat2, lon2) {
@@ -284,6 +302,7 @@
     return m < 1000 ? Math.round(m) + ' μ.' : (m / 1000).toFixed(1) + ' χλμ.';
   }
 
+  // ---- AR.js Components ----
   var _camPos = new THREE.Vector3();
   AFRAME.registerComponent('billboard', {
     tick: function () {
@@ -295,7 +314,6 @@
     }
   });
 
-  // Εξάγει την κατεύθυνση κατευθείαν από την AR κάμερα. Έτσι λύνεται το Gimbal Lock.
   var _cameraDir = new THREE.Vector3();
   AFRAME.registerComponent('hud-compass', {
     tick: function () {
@@ -303,15 +321,12 @@
       if (!cam) return;
       
       cam.getWorldDirection(_cameraDir);
-      
-      // Προβολή του διανύσματος στο οριζόντιο επίπεδο (X-Z)
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
       window.currentHeading = h;
 
       if (this.displayHeading === undefined) this.displayHeading = h;
       
-      // Εύρεση της πιο σύντομης διαδρομής περιστροφής
       var diff = h - (this.displayHeading % 360);
       if (diff > 180) diff -= 360;
       else if (diff < -180) diff += 360;
@@ -325,12 +340,11 @@
         this.needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
         this.degOut.textContent = Math.round(h) + '°';
       }
-      
-      // Ενημέρωση και του δείκτη στον χάρτη
       applyHeadingToDot();
     }
   });
 
+  // ---- Δημιουργία Ταμπελών ----
   function makeLabelImage(story) {
     var W = 900, H = 300, dpr = 2;
     var c = document.createElement('canvas');
@@ -340,16 +354,16 @@
 
     g.fillStyle = 'rgba(14,42,46,0.90)';
     g.fillRect(0, 0, W, H);
-    g.fillStyle = '#F0C244';
+    g.fillStyle = '#F0C244'; // Κίτρινη γραμμή για τα κανονικά
     g.fillRect(0, 0, 14, H);
 
     g.fillStyle = '#F2EDE4';
-    g.font = '600 82px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
+    g.font = '600 82px -apple-system, sans-serif';
     g.textBaseline = 'middle';
     g.fillText(story.title, 52, H / 2 - 26);
 
     g.fillStyle = '#8FC0C4';
-    g.font = '46px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
+    g.font = '46px -apple-system, sans-serif';
     g.fillText(story.subtitle, 52, H / 2 + 50);
 
     var img = document.createElement('img');
@@ -360,8 +374,81 @@
     return img.id;
   }
 
+  function makeClusterImage(count) {
+    var W = 900, H = 300, dpr = 2;
+    var c = document.createElement('canvas');
+    c.width = W * dpr; c.height = H * dpr;
+    var g = c.getContext('2d');
+    g.scale(dpr, dpr);
+
+    g.fillStyle = 'rgba(14,42,46,0.95)';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#4E8C93'; // Μπλε-γαλάζια γραμμή για τις ομάδες
+    g.fillRect(0, 0, 20, H);
+
+    g.fillStyle = '#F2EDE4';
+    g.font = '600 82px -apple-system, sans-serif';
+    g.textBaseline = 'middle';
+    g.fillText(count + ' Σημεία κοντά', 62, H / 2 - 26);
+
+    g.fillStyle = '#8FC0C4';
+    g.font = '46px -apple-system, sans-serif';
+    g.fillText('Πλησίασε για να τα δεις', 62, H / 2 + 50);
+
+    var img = document.createElement('img');
+    img.id = 'lbl-cluster-' + Math.floor(Math.random() * 10000);
+    img.className = 'labelsrc';
+    img.src = c.toDataURL('image/png');
+    document.body.appendChild(img);
+    return img.id;
+  }
+
+  // ---- Υπολογισμός Ομάδων (AR Clusters) ----
+  function prepareARClusters() {
+    var assigned = {};
+    STORIES.forEach(function(s, i) {
+      if (assigned[i]) return;
+      var c = { id: 'ar-cluster-' + i, stories: [s], lat: s.lat, lon: s.lon };
+      assigned[i] = true;
+      
+      STORIES.forEach(function(s2, j) {
+        if (i === j || assigned[j]) return;
+        if (distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
+          c.stories.push(s2);
+          assigned[j] = true;
+        }
+      });
+      
+      if (c.stories.length > 1) {
+        // Βρίσκουμε το γεωγραφικό κέντρο της ομάδας
+        var sumLat = 0, sumLon = 0;
+        c.stories.forEach(function(cs) { sumLat += cs.lat; sumLon += cs.lon; });
+        c.lat = sumLat / c.stories.length;
+        c.lon = sumLon / c.stories.length;
+        AR_CLUSTERS.push(c);
+      }
+    });
+  }
+
   function buildScene() {
+    prepareARClusters();
     var parts = [];
+
+    // 1. Δημιουργία Ταμπελών Ομάδων (Clusters)
+    AR_CLUSTERS.forEach(function(c) {
+      var imgId = makeClusterImage(c.stories.length);
+      parts.push(
+        '<a-entity id="' + c.id + '" class="ar-cluster" ' +
+        'gps-new-entity-place="latitude: ' + c.lat + '; longitude: ' + c.lon + '" ' +
+        'billboard scale="5 5 1">' +
+          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" ' +
+          'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
+          '</a-plane>' +
+        '</a-entity>'
+      );
+    });
+
+    // 2. Δημιουργία Ατομικών Σημείων (Points)
     STORIES.forEach(function (s) {
       var imgId = makeLabelImage(s);
       parts.push(
@@ -374,6 +461,7 @@
         '</a-entity>'
       );
     });
+
     parts.push(
       '<a-camera id="cam" ' +
       'look-controls-enabled="false" ' +
@@ -382,7 +470,7 @@
     );
 
     var scene = document.createElement('a-scene');
-    scene.setAttribute('hud-compass', ''); // Συνδέουμε το component στο scene
+    scene.setAttribute('hud-compass', '');
     scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('loading-screen', 'enabled: false');
     scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
@@ -391,19 +479,51 @@
     document.body.appendChild(scene);
   }
 
-  var scaled = false;
-  function scaleLabels() {
-    if (scaled || !me) return;
+  // Συνεχής ενημέρωση μεγέθους και Ορατότητας (Εμφάνιση/Απόκρυψη Clusters)
+  function updateARLabels() {
+    if (!me) return;
+
+    // Ενημέρωση Clusters
+    AR_CLUSTERS.forEach(function(c) {
+      var el = document.getElementById(c.id);
+      if (!el) return;
+      var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
+      
+      // Αν ο χρήστης είναι κοντά, ΚΡΥΨΕ την ομαδική ταμπέλα
+      if (d < CLUSTER_REVEAL_M) {
+        el.setAttribute('visible', 'false');
+      } else {
+        el.setAttribute('visible', 'true');
+        var k = Math.max(d, 25) * 0.09;
+        el.setAttribute('scale', k + ' ' + k + ' 1');
+      }
+    });
+
+    // Ενημέρωση Ατομικών Ταμπελών
     STORIES.forEach(function (s) {
       var el = document.querySelector('.poi[data-id="' + s.id + '"]');
       if (!el) return;
+
+      var parentCluster = AR_CLUSTERS.find(function(c) { return c.stories.includes(s); });
+      
+      if (parentCluster) {
+        var clusterDist = distanceMetres(me.lat, me.lon, parentCluster.lat, parentCluster.lon);
+        // Αν ανήκει σε ομάδα ΚΑΙ είμαστε μακριά, ΚΡΥΨΕ το ατομικό σημείο
+        if (clusterDist >= CLUSTER_REVEAL_M) {
+          el.setAttribute('visible', 'false');
+          return;
+        }
+      }
+      
+      // Αν δεν ανήκει σε ομάδα, ή ανήκει αλλά είμαστε κοντά, ΔΕΙΞΕ το
+      el.setAttribute('visible', 'true');
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
       var k = Math.max(d, 25) * 0.09;
       el.setAttribute('scale', k + ' ' + k + ' 1');
     });
-    scaled = true;
   }
 
+  // ---- Map & MarkerCluster ----
   var map = null, meMarker = null, accCircle = null, followMe = true;
 
   function initMap() {
@@ -416,17 +536,31 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
+    // Ενεργοποίηση Leaflet MarkerCluster
+    var markers = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      iconCreateFunction: function(cluster) {
+        return L.divIcon({
+          html: cluster.getChildCount(),
+          className: 'map-cluster-dot',
+          iconSize: [32, 32]
+        });
+      }
+    });
+
     STORIES.forEach(function (s) {
-      L.marker([s.lat, s.lon], {
+      var m = L.marker([s.lat, s.lon], {
         icon: L.divIcon({
           className: '', html: '<div class="poi-dot"></div>',
           iconSize: [13, 13], iconAnchor: [6, 6]
         }),
         title: s.title,
         alt: s.title
-      }).addTo(map).on('click', function () { openStory(s); });
+      }).on('click', function () { openStory(s); });
+      markers.addLayer(m);
     });
 
+    map.addLayer(markers);
     map.on('dragstart', function () { followMe = false; });
   }
 
@@ -461,7 +595,6 @@
   function applyHeadingToDot() {
     if (!meMarker || window.currentHeading === null) return;
     
-    // Αποθήκευση του DOM στοιχείου για να είναι αποδοτικό στο tick της κάμερας
     if (!cachedRot) {
       var elm = meMarker.getElement();
       if (elm) cachedRot = elm.querySelector('.me-rot');
@@ -493,22 +626,18 @@
   function initDrawer() {
     var hd = $('handle');
     var startY = null, moved = false;
-
     hd.addEventListener('click', function () {
       if (moved) { moved = false; return; }
       setDrawer(!$('drawer').classList.contains('open'));
     });
-
     hd.addEventListener('pointerdown', function (e) {
       startY = e.clientY; moved = false;
       hd.setPointerCapture(e.pointerId);
     });
-
     hd.addEventListener('pointermove', function (e) {
       if (startY === null) { return; }
       if (Math.abs(e.clientY - startY) > 12) { moved = true; }
     });
-
     hd.addEventListener('pointerup', function (e) {
       if (startY === null) { return; }
       var dy = e.clientY - startY;
@@ -523,10 +652,12 @@
       lon: pos.coords.longitude,
       accuracy: pos.coords.accuracy
     };
-    scaleLabels();
+    
+    // Ενημερώνουμε συνεχώς το μέγεθος ΚΑΙ την εμφάνιση/απόκρυψη των clusters
+    updateARLabels();
     updateMap();
 
-    var dbg = params.has('debug') ? '   ετικέτες ' + document.querySelectorAll('.poi').length : '';
+    var dbg = params.has('debug') ? '   Σημεία: ' + STORIES.length : '';
     $('status').textContent =
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
       'πυξίδα ' + (window.currentHeading === null ? '—' : Math.round(window.currentHeading) + '°') + dbg;
@@ -594,8 +725,7 @@
       btn.textContent = 'Δοκίμασε ξανά';
       $('gate').querySelector('p').textContent =
         'Δεν ξεκίνησε: ' + (e.message || e) +
-        ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια για ' +
-        'κάμερα, τοποθεσία και αισθητήρες.';
+        ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια.';
     });
   });
 })();
