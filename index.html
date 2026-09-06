@@ -125,7 +125,7 @@
 <div id="gate">
   <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
-  <p>Τρία δοκιμαστικά σημεία, από 45 έως 215 μέτρα μεταξύ τους.</p>
+  <p>Άγιος Θεράπων, Πλατεία Σαπφούς, ΙΚΑ στην Επάνω Σκάλα.</p>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn" type="button">Ξεκίνα τη διαδρομή</button>
 </div>
@@ -170,23 +170,24 @@
      ================================================================ */
   var STORIES = [
     {
-      id: 'mt-001', title: 'Σημείο Α', subtitle: 'Ερμού, βόρειο τμήμα',
-      lat: 39.108553, lon: 26.556917, radius: 30,
-      text: 'Δοκιμαστικό κείμενο για τον έλεγχο της ροής ανάγνωσης. Εδώ ' +
-            'θα εμφανιζόταν η αφήγηση που έχει συνδεθεί με το σημείο, ' +
-            'μαζί με τα μεταδεδομένα της.'
+      id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
+      lat: 39.1051514, lon: 26.5547650, radius: 35,
+      text: 'Δοκιμαστικό κείμενο για τον έλεγχο της ροής ανάγνωσης. Εδώ θα ' +
+            'εμφανιζόταν η αφήγηση που έχει συνδεθεί με το σημείο, μαζί με ' +
+            'τα μεταδεδομένα της και τον συντελεστή που την κατέθεσε.'
     },
     {
-      id: 'mt-002', title: 'Σημείο Β', subtitle: 'Περίπου 47 μ. νότια',
-      lat: 39.108145, lon: 26.556762, radius: 30,
-      text: 'Δεύτερο δοκιμαστικό σημείο. Η απόσταση από το πρώτο είναι ' +
-            'αρκετή ώστε οι δύο ετικέτες να διαχωρίζονται σταθερά.'
-    },
-    {
-      id: 'mt-003', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή, ~215 μ. νότια',
+      id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή',
       lat: 39.1066446, lon: 26.5574660, radius: 40,
-      text: 'Μακρινό σημείο. Χρησιμεύει για να ελεγχθεί αν η ετικέτα ' +
-            'παραμένει ευανάγνωστη και σταθερή σε μεγάλη απόσταση.'
+      text: 'Δεύτερο δοκιμαστικό σημείο, περίπου 285 μ. από τον Άγιο ' +
+            'Θεράποντα. Μεσαία απόσταση, χρήσιμη για σύγκριση.'
+    },
+    {
+      id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα',
+      lat: 39.1118710, lon: 26.5566432, radius: 40,
+      text: 'Τρίτο δοκιμαστικό σημείο, περίπου 585 μ. από την Πλατεία ' +
+            'Σαπφούς. Ελέγχει αν η ετικέτα παραμένει ευανάγνωστη σε ' +
+            'μεγάλη απόσταση.'
     }
   ];
 
@@ -236,7 +237,7 @@
   /* canvas.                                                          */
   /* ---------------------------------------------------------------- */
   function makeLabelImage(story) {
-    var W = 1024, H = 256, dpr = 2;
+    var W = 900, H = 300, dpr = 2;
     var c = document.createElement('canvas');
     c.width = W * dpr; c.height = H * dpr;
     var g = c.getContext('2d');
@@ -245,16 +246,16 @@
     g.fillStyle = 'rgba(14,42,46,0.90)';
     g.fillRect(0, 0, W, H);
     g.fillStyle = '#F0C244';
-    g.fillRect(0, 0, 16, H);
+    g.fillRect(0, 0, 14, H);
 
     g.fillStyle = '#F2EDE4';
     g.font = '600 82px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
     g.textBaseline = 'middle';
-    g.fillText(story.title, 52, H / 2 - 22);
+    g.fillText(story.title, 52, H / 2 - 26);
 
     g.fillStyle = '#8FC0C4';
     g.font = '46px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
-    g.fillText(story.subtitle, 52, H / 2 + 52);
+    g.fillText(story.subtitle, 52, H / 2 + 50);
 
     var img = document.createElement('img');
     img.id = 'lbl-' + story.id;
@@ -276,8 +277,8 @@
       parts.push(
         '<a-entity class="poi" data-id="' + s.id + '" ' +
         'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
-        'billboard scale="20 5 1">' +
-          '<a-plane width="4" height="1" ' +
+        'billboard scale="5 5 1">' +
+          '<a-plane width="3" height="1" ' +
           'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
           '</a-plane>' +
         '</a-entity>'
@@ -310,8 +311,11 @@
       var el = document.querySelector('.poi[data-id="' + s.id + '"]');
       if (!el) return;
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
-      var k = Math.max(d, 25) * 0.10;
-      el.setAttribute('scale', (k * 4) + ' ' + k + ' 1');
+      /* Η αναλογία 3:1 είναι ΗΔΗ μέσα στο <a-plane width="3" height="1">.
+         Η κλίμακα πρέπει να είναι ομοιόμορφη, αλλιώς πολλαπλασιάζεται
+         δεύτερη φορά και η ετικέτα βγαίνει τριπλάσια σε πλάτος. */
+      var k = Math.max(d, 25) * 0.09;
+      el.setAttribute('scale', k + ' ' + k + ' 1');
     });
     scaled = true;
   }
