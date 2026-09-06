@@ -221,28 +221,28 @@
   </div>
 </div>
 
-
 <script>
 (function () {
   'use strict';
 
+  // Θυμήσου να ενημερώσεις τις συντεταγμένες lat/lon με τις πραγματικές
   var STORIES = [
     {
       id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
-      lat: 39.105107, lon: 26.554811, radius: 35,  
+      lat: 39.1051514, lon: 26.5547650, radius: 35,
       text: 'Δοκιμαστικό κείμενο για τον έλεγχο της ροής ανάγνωσης. Εδώ θα ' +
             'εμφανιζόταν η αφήγηση που έχει συνδεθεί με το σημείο, μαζί με ' +
             'τα μεταδεδομένα της και τον συντελεστή που την κατέθεσε.'
     },
     {
       id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή',
-      lat: 39.106643, lon: 26.557399, radius: 40, 
+      lat: 39.1066446, lon: 26.5574660, radius: 40,
       text: 'Δεύτερο δοκιμαστικό σημείο, περίπου 285 μ. από τον Άγιο ' +
             'Θεράποντα. Μεσαία απόσταση, χρήσιμη για σύγκριση.'
     },
     {
       id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα',
-      lat: 39.111919, lon: 26.556779, radius: 40, 
+      lat: 39.1118710, lon: 26.5566432, radius: 40,
       text: 'Τρίτο δοκιμαστικό σημείο, περίπου 585 μ. από την Πλατεία ' +
             'Σαπφούς. Ελέγχει αν η ετικέτα παραμένει ευανάγνωστη σε ' +
             'μεγάλη απόσταση.'
@@ -253,23 +253,6 @@
   var SMOOTHING = parseFloat(params.get('k')) || 0.1;
   var MIN_DIST  = parseFloat(params.get('d')) || 5;
   var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 0.55;
-
-  var CAL_KEY = 'wm-compass-cal';
-  function loadCal() {
-    if (params.has('cal')) { return parseFloat(params.get('cal')) || 0; }
-    try {
-      var v = window.localStorage.getItem(CAL_KEY);
-      return v === null ? null : parseFloat(v);
-    } catch (e) {
-      return null;
-    }
-  }
-  function saveCal(v) {
-    try { window.localStorage.setItem(CAL_KEY, String(v)); } catch (e) { /* αδιάφορο */ }
-  }
-
-  var CAL = loadCal();
-  var calAuto = (CAL === null);
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
@@ -282,6 +265,7 @@
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
+  
   function fmt(m) {
     return m < 1000 ? Math.round(m) + ' μ.' : (m / 1000).toFixed(1) + ' χλμ.';
   }
@@ -422,39 +406,6 @@
     if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
   }
 
-  var AUTO_MIN_SPEED = 1.2;
-  var AUTO_MAX_ACC   = 30;
-  var AUTO_SAMPLES   = 8;
-  var sumSin = 0, sumCos = 0, nSamples = 0;
-
-  function autoCalibrate(coords) {
-    if (!calAuto || rawHeading === null) { return; }
-    if (coords.speed === null || coords.speed < AUTO_MIN_SPEED) { return; }
-    if (coords.heading === null || isNaN(coords.heading)) { return; }
-    if (coords.accuracy > AUTO_MAX_ACC) { return; }
-
-    var off = ((coords.heading - rawHeading + 540) % 360) - 180;
-    
-    sumSin += Math.sin(off * Math.PI / 180);
-    sumCos += Math.cos(off * Math.PI / 180);
-    nSamples++;
-
-    if (nSamples >= AUTO_SAMPLES) {
-      var mean = Math.atan2(sumSin, sumCos) * 180 / Math.PI;
-      CAL = Math.round(mean * 10) / 10;
-      calAuto = false;
-      saveCal(CAL);
-      applyHeadingToDot();
-    }
-  }
-
-  function autoProgress() {
-    if (!calAuto) { return ''; }
-    return nSamples > 0
-      ? '   βαθμονόμηση ' + nSamples + '/' + AUTO_SAMPLES
-      : '   περπάτα ευθεία για βαθμονόμηση';
-  }
-
   function applyHeadingToDot() {
     if (!meMarker) { return; }
     var elm = meMarker.getElement();
@@ -526,7 +477,6 @@
   }
 
   var rawSeen = '';
-  var rawHeading = null;
   function onOrientation(e) {
     var hd = readHeading(e);
     if (params.has('debug')) {
@@ -538,8 +488,10 @@
         ' scr ' + screenAngle();
     }
     if (hd === null) { return; }
-    rawHeading = (hd + screenAngle()) % 360;
-    heading = (rawHeading + (CAL || 0) + 360) % 360;
+    
+    // Η τελική τιμή πυξίδας
+    heading = (hd + screenAngle()) % 360;
+    
     if (!needle) {
       needle = document.querySelector('#compass .needle');
       degOut = document.querySelector('#compass .deg');
@@ -562,16 +514,13 @@
     };
     scaleLabels();
     updateMap();
-    autoCalibrate(pos.coords);
 
     var dbg = params.has('debug')
       ? '   ετικέτες ' + document.querySelectorAll('.poi').length + '   ' + rawSeen
       : '';
     $('status').textContent =
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
-      'πυξίδα ' + (heading === null ? '—' : Math.round(heading) + '°') +
-      (CAL ? '  (διόρθ. ' + (CAL > 0 ? '+' : '') + CAL + '°)' : '') +
-      autoProgress() + dbg;
+      'πυξίδα ' + (heading === null ? '—' : Math.round(heading) + '°') + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
@@ -593,6 +542,7 @@
     $('sheet').classList.add('on');
     $('closeBtn').focus();
   }
+  
   $('closeBtn').addEventListener('click', function () {
     $('sheet').classList.remove('on');
     if (lastFocus) lastFocus.focus();
