@@ -7,11 +7,10 @@
 
 <!--
   WALKING MEMORY (GA 101288157) — spike για το Task 4.2.
-  ΑΠΑΙΤΕΙ HTTPS. Προστέθηκε MarkerCluster για χάρτη & δυναμικό AR Cluster.
+  ΑΠΑΙΤΕΙ HTTPS. Προστέθηκε MarkerCluster, δυναμικό AR Cluster & Βελτιωμένος ρυθμός ανανέωσης GPS.
 -->
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<!-- Φόρτωση του πρόσθετου MarkerCluster για τον χάρτη -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
 
@@ -99,7 +98,6 @@
   }
   .leaflet-control-attribution a { color: var(--chalk) !important; }
 
-  /* Στυλ για τα clusters στον χάρτη */
   .map-cluster-dot {
     background: var(--sea);
     color: var(--bone);
@@ -277,13 +275,13 @@
 
   var params = new URLSearchParams(location.search);
   var SMOOTHING = parseFloat(params.get('k')) || 0.1;
-  var MIN_DIST  = parseFloat(params.get('d')) || 5;
+  // Μειώθηκε στο 2 η ελάχιστη απόσταση ανανέωσης AR (από 5), για πιο άμεση απόκριση στο περπάτημα
+  var MIN_DIST  = parseFloat(params.get('d')) || 2; 
   var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 1.2;
 
-  // Μεταβλητές για το Cluster στο AR
   var AR_CLUSTERS = [];
-  var CLUSTER_RADIUS_M = 50; // Απόσταση μεταξύ σημείων για να γίνουν ομάδα
-  var CLUSTER_REVEAL_M = 80; // Αν πλησιάσεις πιο κοντά, η ομάδα ανοίγει
+  var CLUSTER_RADIUS_M = 50; 
+  var CLUSTER_REVEAL_M = 80; 
 
   var $ = function (id) { return document.getElementById(id); };
   var me = null, lastFocus = null;
@@ -302,7 +300,6 @@
     return m < 1000 ? Math.round(m) + ' μ.' : (m / 1000).toFixed(1) + ' χλμ.';
   }
 
-  // ---- AR.js Components ----
   var _camPos = new THREE.Vector3();
   AFRAME.registerComponent('billboard', {
     tick: function () {
@@ -344,7 +341,6 @@
     }
   });
 
-  // ---- Δημιουργία Ταμπελών ----
   function makeLabelImage(story) {
     var W = 900, H = 300, dpr = 2;
     var c = document.createElement('canvas');
@@ -354,7 +350,7 @@
 
     g.fillStyle = 'rgba(14,42,46,0.90)';
     g.fillRect(0, 0, W, H);
-    g.fillStyle = '#F0C244'; // Κίτρινη γραμμή για τα κανονικά
+    g.fillStyle = '#F0C244'; 
     g.fillRect(0, 0, 14, H);
 
     g.fillStyle = '#F2EDE4';
@@ -383,7 +379,7 @@
 
     g.fillStyle = 'rgba(14,42,46,0.95)';
     g.fillRect(0, 0, W, H);
-    g.fillStyle = '#4E8C93'; // Μπλε-γαλάζια γραμμή για τις ομάδες
+    g.fillStyle = '#4E8C93'; 
     g.fillRect(0, 0, 20, H);
 
     g.fillStyle = '#F2EDE4';
@@ -403,7 +399,6 @@
     return img.id;
   }
 
-  // ---- Υπολογισμός Ομάδων (AR Clusters) ----
   function prepareARClusters() {
     var assigned = {};
     STORIES.forEach(function(s, i) {
@@ -420,7 +415,6 @@
       });
       
       if (c.stories.length > 1) {
-        // Βρίσκουμε το γεωγραφικό κέντρο της ομάδας
         var sumLat = 0, sumLon = 0;
         c.stories.forEach(function(cs) { sumLat += cs.lat; sumLon += cs.lon; });
         c.lat = sumLat / c.stories.length;
@@ -434,7 +428,6 @@
     prepareARClusters();
     var parts = [];
 
-    // 1. Δημιουργία Ταμπελών Ομάδων (Clusters)
     AR_CLUSTERS.forEach(function(c) {
       var imgId = makeClusterImage(c.stories.length);
       parts.push(
@@ -448,7 +441,6 @@
       );
     });
 
-    // 2. Δημιουργία Ατομικών Σημείων (Points)
     STORIES.forEach(function (s) {
       var imgId = makeLabelImage(s);
       parts.push(
@@ -479,17 +471,14 @@
     document.body.appendChild(scene);
   }
 
-  // Συνεχής ενημέρωση μεγέθους και Ορατότητας (Εμφάνιση/Απόκρυψη Clusters)
   function updateARLabels() {
     if (!me) return;
 
-    // Ενημέρωση Clusters
     AR_CLUSTERS.forEach(function(c) {
       var el = document.getElementById(c.id);
       if (!el) return;
       var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
       
-      // Αν ο χρήστης είναι κοντά, ΚΡΥΨΕ την ομαδική ταμπέλα
       if (d < CLUSTER_REVEAL_M) {
         el.setAttribute('visible', 'false');
       } else {
@@ -499,7 +488,6 @@
       }
     });
 
-    // Ενημέρωση Ατομικών Ταμπελών
     STORIES.forEach(function (s) {
       var el = document.querySelector('.poi[data-id="' + s.id + '"]');
       if (!el) return;
@@ -508,14 +496,12 @@
       
       if (parentCluster) {
         var clusterDist = distanceMetres(me.lat, me.lon, parentCluster.lat, parentCluster.lon);
-        // Αν ανήκει σε ομάδα ΚΑΙ είμαστε μακριά, ΚΡΥΨΕ το ατομικό σημείο
         if (clusterDist >= CLUSTER_REVEAL_M) {
           el.setAttribute('visible', 'false');
           return;
         }
       }
       
-      // Αν δεν ανήκει σε ομάδα, ή ανήκει αλλά είμαστε κοντά, ΔΕΙΞΕ το
       el.setAttribute('visible', 'true');
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
       var k = Math.max(d, 25) * 0.09;
@@ -523,7 +509,6 @@
     });
   }
 
-  // ---- Map & MarkerCluster ----
   var map = null, meMarker = null, accCircle = null, followMe = true;
 
   function initMap() {
@@ -536,7 +521,6 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // Ενεργοποίηση Leaflet MarkerCluster
     var markers = L.markerClusterGroup({
       maxClusterRadius: 40,
       iconCreateFunction: function(cluster) {
@@ -653,7 +637,6 @@
       accuracy: pos.coords.accuracy
     };
     
-    // Ενημερώνουμε συνεχώς το μέγεθος ΚΑΙ την εμφάνιση/απόκρυψη των clusters
     updateARLabels();
     updateMap();
 
@@ -712,13 +695,15 @@
         $('status').textContent = 'Η συσκευή δεν δίνει τοποθεσία.';
         return;
       }
+      
+      // ΑΛΛΑΓΗ ΣΤΟ maximumAge ΓΙΑ ΠΙΟ ΣΥΧΝΗ ΑΝΑΝΕΩΣΗ (από 1000 σε 0)
       navigator.geolocation.watchPosition(
         onPosition,
         function (err) {
           $('status').textContent =
             'Δεν βρέθηκε στίγμα (κωδικός ' + err.code + '). Βγες σε ανοιχτό χώρο.';
         },
-        { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 } 
       );
     }).catch(function (e) {
       btn.disabled = false;
@@ -728,6 +713,19 @@
         ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια.';
     });
   });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      var camEl = document.getElementById('cam');
+      if (camEl) {
+        camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: 1');
+        setTimeout(function () {
+          camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: ' + SMOOTHING);
+        }, 1000);
+      }
+    }
+  });
+
 })();
 </script>
 </body>
