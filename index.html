@@ -158,9 +158,12 @@
   .me-cone {
     position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%);
     width: 0; height: 0;
-    border-left: 15px solid transparent;
-    border-right: 15px solid transparent;
-    border-top: 26px solid rgba(240, 194, 68, 0.42);
+    border-left: 17px solid transparent;
+    border-right: 17px solid transparent;
+    border-top: 30px solid rgba(240, 194, 68, 0.88);
+    /* Περίγραμμα σε σκούρο, ώστε ο κώνος να ξεχωρίζει και πάνω από
+       ανοιχτόχρωμα πλακίδια του χάρτη, όχι μόνο πάνω από σκούρα. */
+    filter: drop-shadow(0 0 2px rgba(14, 42, 46, 0.95));
   }
   /* Χωρίς έγκυρη πυξίδα δεν δείχνουμε κατεύθυνση που δεν ξέρουμε. */
   .me-rot.unknown .me-cone { display: none; }
