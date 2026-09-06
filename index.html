@@ -32,12 +32,12 @@
   ΠΑΡΑΜΕΤΡΟΙ URL
     ?k=0.2   αλλάζει το smoothingFactor για σύγκριση στο πεδίο
     ?d=2     αλλάζει το gpsMinDistance σε μέτρα
+    ?debug   δείχνει πόσες ετικέτες μπήκαν στη σκηνή
 
   ΑΠΑΙΤΕΙ HTTPS.
 -->
 
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-<script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
@@ -56,7 +56,9 @@
   }
   button { font: inherit; cursor: pointer; border: 0; border-radius: 2px; }
   button:focus-visible { outline: 3px solid var(--chalk); outline-offset: 3px; }
-  canvas.labelsrc { display: none; }
+  img.labelsrc { display: none; }
+  a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important;
+                               width: 100% !important; height: 100% !important; z-index: 0; }
 
   #gate {
     position: fixed; inset: 0; z-index: 40;
@@ -145,7 +147,6 @@
   </div>
 </div>
 
-<div id="sceneHost"></div>
 
 <script>
 (function () {
@@ -213,14 +214,30 @@
   }
 
   /* ---------------------------------------------------------------- */
-  /* Ετικέτα σε canvas — η προεπιλεγμένη γραμματοσειρά του a-text δεν  */
-  /* έχει ελληνικούς χαρακτήρες, οπότε τη ζωγραφίζουμε μόνοι μας.      */
+  /* Billboard: στρέφει την ετικέτα προς την κάμερα, μόνο γύρω από τον */
+  /* κατακόρυφο άξονα ώστε να μη γέρνει. Έξι γραμμές αντί για εξωτερικό */
+  /* component — μία εξάρτηση και μία ασυμβατότητα εκδόσεων λιγότερη.  */
   /* ---------------------------------------------------------------- */
-  function makeLabelCanvas(story) {
+  var _camPos = new THREE.Vector3();
+  AFRAME.registerComponent('billboard', {
+    tick: function () {
+      var cam = this.el.sceneEl && this.el.sceneEl.camera;
+      if (!cam) { return; }
+      cam.getWorldPosition(_camPos);
+      var o = this.el.object3D;
+      o.lookAt(_camPos.x, o.position.y, _camPos.z);
+    }
+  });
+
+  /* ---------------------------------------------------------------- */
+  /* Ετικέτα: ζωγραφίζεται σε canvas και περνάει ως <img> με data URL. */
+  /* Η προεπιλεγμένη γραμματοσειρά του a-text δεν έχει ελληνικά, και   */
+  /* ένα <img> είναι πιο αξιόπιστη πηγή texture από έναν ζωντανό       */
+  /* canvas.                                                          */
+  /* ---------------------------------------------------------------- */
+  function makeLabelImage(story) {
     var W = 1024, H = 256, dpr = 2;
     var c = document.createElement('canvas');
-    c.id = 'lbl-' + story.id;
-    c.className = 'labelsrc';
     c.width = W * dpr; c.height = H * dpr;
     var g = c.getContext('2d');
     g.scale(dpr, dpr);
@@ -239,8 +256,12 @@
     g.font = '46px -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif';
     g.fillText(story.subtitle, 52, H / 2 + 52);
 
-    document.body.appendChild(c);
-    return c.id;
+    var img = document.createElement('img');
+    img.id = 'lbl-' + story.id;
+    img.className = 'labelsrc';
+    img.src = c.toDataURL('image/png');
+    document.body.appendChild(img);
+    return img.id;
   }
 
   /* ---------------------------------------------------------------- */
@@ -248,38 +269,37 @@
   /* ---------------------------------------------------------------- */
   function buildScene() {
     var parts = [];
-    parts.push(
-      '<a-scene vr-mode-ui="enabled: false" embedded ' +
-      'loading-screen="enabled: false" ' +
-      'arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false" ' +
-      'renderer="antialias: true; alpha: true">'
-    );
-
     STORIES.forEach(function (s) {
-      var canvasId = makeLabelCanvas(s);
-      /* Το μέγεθος δίνεται σε μέτρα. Το AR.js δεν κλιμακώνει με την
-         απόσταση, οπότε το κάνουμε εμείς: μια ετικέτα στα 215 μ.
-         πρέπει να είναι πολύ μεγαλύτερη από μία στα 45 μ. για να
-         πιάνει παρόμοιο κομμάτι της οθόνης. Η κλίμακα ορίζεται στο
-         πρώτο στίγμα, μέσα στο onPosition(). */
+      var imgId = makeLabelImage(s);
+      /* Αρχική κλίμακα ώστε να φαίνεται κάτι πριν έρθει το πρώτο
+         στίγμα. Διορθώνεται στο scaleLabels(). */
       parts.push(
         '<a-entity class="poi" data-id="' + s.id + '" ' +
         'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
-        'look-at="#cam" scale="4 1 1">' +
-          '<a-plane width="4" height="1" material="src: #' + canvasId +
-          '; transparent: true; shader: flat"></a-plane>' +
+        'billboard scale="20 5 1">' +
+          '<a-plane width="4" height="1" ' +
+          'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
+          '</a-plane>' +
         '</a-entity>'
       );
     });
-
     parts.push(
       '<a-camera id="cam" ' +
       'look-controls-enabled="false" ' +
       'arjs-device-orientation-controls="smoothingFactor: ' + SMOOTHING + '" ' +
       'gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"></a-camera>'
     );
-    parts.push('</a-scene>');
-    $('sceneHost').innerHTML = parts.join('');
+
+    /* Χωρίς embedded, και προσαρτάται απευθείας στο <body>. Με embedded
+       μέσα σε container χωρίς ύψος, ο καμβάς βγαίνει 0 pixels και δεν
+       φαίνεται τίποτα — η κάμερα ανοίγει κανονικά, που παραπλανά. */
+    var scene = document.createElement('a-scene');
+    scene.setAttribute('vr-mode-ui', 'enabled: false');
+    scene.setAttribute('loading-screen', 'enabled: false');
+    scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
+    scene.setAttribute('renderer', 'antialias: true; alpha: true');
+    scene.innerHTML = parts.join('');
+    document.body.appendChild(scene);
   }
 
   /* Κλιμάκωση ετικετών ανάλογα με την απόσταση, μία φορά */
@@ -307,9 +327,12 @@
     };
     scaleLabels();
 
+    var dbg = params.has('debug')
+      ? '   ετικέτες ' + document.querySelectorAll('.poi').length
+      : '';
     $('status').textContent =
       'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
-      'εξομάλυνση ' + SMOOTHING + '   κατώφλι ' + MIN_DIST + ' μ.';
+      'εξομάλυνση ' + SMOOTHING + '   κατώφλι ' + MIN_DIST + ' μ.' + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
