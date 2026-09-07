@@ -200,34 +200,34 @@
 </head>
 <body>
 
-<div id="gate">
+<div id="gate" role="region" aria-label="Οθόνη καλωσορίσματος">
   <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
-  <div class="rule"></div>
+  <div class="rule" aria-hidden="true"></div>
   <p>10 Σημεία με δυναμική ομαδοποίηση (Clusters).</p>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn" type="button">Ξεκίνα τη διαδρομή</button>
 </div>
 
-<div id="hud">
+<div id="hud" aria-hidden="true">
   <div id="status" role="status" aria-live="polite">Αναμονή για στίγμα…</div>
-  <button id="nearest" type="button">
-    <span class="dist"></span><span class="name"></span>
+  <button id="nearest" type="button" aria-label="Πλησιέστερο σημείο ενδιαφέροντος">
+    <span class="dist" aria-hidden="true"></span><span class="name" aria-hidden="true"></span>
   </button>
 </div>
 
-<div id="drawer">
+<div id="drawer" role="region" aria-label="Περιοχή Χάρτη">
   <button id="handle" type="button" aria-expanded="false" aria-controls="map">
     <span class="grip" aria-hidden="true"></span>
     <span class="lbl">Χάρτης</span>
-    <span class="hint">σύρε πάνω</span>
+    <span class="hint" aria-hidden="true">σύρε πάνω</span>
   </button>
-  <div id="map" aria-label="Χάρτης διαδρομής">
+  <div id="map" aria-label="Χάρτης διαδρομής" role="application">
     <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
   </div>
 </div>
 
-<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
-  <div id="sheetInner">
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true">
+  <div id="sheetInner" tabindex="-1">
     <span class="note">Δοκιμαστικό κείμενο, όχι μαρτυρία</span>
     <h2 id="sheetTitle"></h2>
     <p class="sub"></p>
@@ -266,7 +266,7 @@
       lat: 39.11180, lon: 26.55660, radius: 40,
       text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.'
     },
-      {
+    {
       id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού',
       lat: 39.110015, lon: 26.558099, radius: 40,  
       text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.'
@@ -275,7 +275,6 @@
 
   var params = new URLSearchParams(location.search);
   var SMOOTHING = parseFloat(params.get('k')) || 0.1;
-  // Μειώθηκε στο 2 η ελάχιστη απόσταση ανανέωσης AR (από 5), για πιο άμεση απόκριση στο περπάτημα
   var MIN_DIST  = parseFloat(params.get('d')) || 2; 
   var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 1.2;
 
@@ -297,7 +296,7 @@
   }
   
   function fmt(m) {
-    return m < 1000 ? Math.round(m) + ' μ.' : (m / 1000).toFixed(1) + ' χλμ.';
+    return m < 1000 ? Math.round(m) + ' μέτρα' : (m / 1000).toFixed(1) + ' χιλιόμετρα';
   }
 
   var _camPos = new THREE.Vector3();
@@ -535,7 +534,7 @@
     STORIES.forEach(function (s) {
       var m = L.marker([s.lat, s.lon], {
         icon: L.divIcon({
-          className: '', html: '<div class="poi-dot"></div>',
+          className: '', html: '<div class="poi-dot" aria-hidden="true"></div>',
           iconSize: [13, 13], iconAnchor: [6, 6]
         }),
         title: s.title,
@@ -640,19 +639,24 @@
     updateARLabels();
     updateMap();
 
-    var dbg = params.has('debug') ? '   Σημεία: ' + STORIES.length : '';
+    var dbg = params.has('debug') ? '    Σημεία: ' + STORIES.length : '';
+    $('statusлогу') // safety
     $('status').textContent =
-      'στίγμα ±' + Math.round(me.accuracy) + ' μ.   ' +
-      'πυξίδα ' + (window.currentHeading === null ? '—' : Math.round(window.currentHeading) + '°') + dbg;
+      'Ακρίβεια στίγματος συν πλην ' + Math.round(me.accuracy) + ' μέτρα. ' +
+      'Πυξίδα ' + (window.currentHeading === null ? 'χωρίς σήμα' : Math.round(window.currentHeading) + ' μοίρες') + dbg;
 
     var ranked = STORIES.map(function (s) {
       return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
     }).sort(function (a, b) { return a.d - b.d; });
 
     var c = ranked[0], btn = $('nearest');
-    btn.querySelector('.dist').textContent =
-      c.d <= c.s.radius ? 'Είσαι εδώ' : fmt(c.d) + ' μακριά';
+    var distText = c.d <= c.s.radius ? 'Είσαι εδώ' : fmt(c.d) + ' μακριά';
+    
+    btn.querySelector('.dist').textContent = distText;
     btn.querySelector('.name').textContent = c.s.title;
+    // Update accessibility label explicitly for screen readers
+    btn.setAttribute('aria-label', 'Πλησιέστερο σημείο: ' + c.s.title + ', ' + distText);
+    
     btn.classList.add('on');
     btn.onclick = function () { openStory(c.s); };
   }
@@ -662,14 +666,27 @@
     $('sheetTitle').textContent = s.title;
     $('sheet').querySelector('.sub').textContent = s.subtitle;
     $('sheet').querySelector('.body').textContent = s.text;
-    $('sheet').classList.add('on');
-    $('closeBtn').focus();
+    
+    var sheet = $('sheet');
+    sheet.classList.add('on');
+    sheet.setAttribute('aria-hidden', 'false');
+    
+    // Focus management for Screen Readers
+    setTimeout(function() {
+      $('sheetInner').focus();
+    }, 100);
   }
   
-  $('closeBtn').addEventListener('click', function () {
-    $('sheet').classList.remove('on');
-    if (lastFocus) lastFocus.focus();
-  });
+  function closeStorySheet() {
+    var sheet = $('sheet');
+    sheet.classList.remove('on');
+    sheet.setAttribute('aria-hidden', 'true');
+    if (lastFocus) {
+      lastFocus.focus();
+    }
+  }
+
+  $('closeBtn').addEventListener('click', closeStorySheet);
 
   $('startBtn').addEventListener('click', function () {
     var btn = $('startBtn');
@@ -688,6 +705,7 @@
       buildScene();
       $('gate').style.display = 'none';
       $('hud').classList.add('on');
+      $('hud').removeAttribute('aria-hidden');
       initMap();
       initDrawer();
 
@@ -696,7 +714,6 @@
         return;
       }
       
-      // ΑΛΛΑΓΗ ΣΤΟ maximumAge ΓΙΑ ΠΙΟ ΣΥΧΝΗ ΑΝΑΝΕΩΣΗ (από 1000 σε 0)
       navigator.geolocation.watchPosition(
         onPosition,
         function (err) {
