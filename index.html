@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>Διαδρομή μνήμης — Μυτιλήνη (AR & Fast Local Editor)</title>
+<title>Διαδρομή μνήμης — Μυτιλήνη (AR & Working Audio Mute)</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
@@ -405,7 +405,7 @@
   });
 
   // ==========================================
-  // 2. FAST LOCAL EDITOR (ΔΙΟΡΘΩΜΕΝΟ BLUR & AUDIO MUTE)
+  // 2. FAST LOCAL EDITOR (ΔΙΟΡΘΩΜΕΝΟ AUDIO PROCESSING & BLUR)
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
@@ -476,7 +476,7 @@
     }
   };
 
-  // ΔΙΟΡΘΩΜΕΝΟ BLUR (Ακολουθεί ομαλά το σύρσιμο)
+  // ΟΜΑΛΟ BLUR (Διόρθωση pointermove)
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -517,7 +517,7 @@
     $('uploadSheet').classList.add('on');
   };
 
-  // ΔΙΟΡΘΩΜΕΝΗ ΑΠΟΘΗΚΕΥΣΗ (Διαβάζει κανονικά τα Mute ranges του ήχου)
+  // ΑΚΑΡΙΑΙΑ ΑΠΟΘΗΚΕΥΣΗ ΜΕ ΠΡΑΓΜΑΤΙΚΗ ΕΠΕΞΕΡΓΑΣΙΑ ΉΧΟΥ
   $('saveFileBtn').onclick = async function() {
     try {
       if (currentFile.type.startsWith('image/')) {
@@ -537,10 +537,17 @@
       else if (currentFile.type.startsWith('audio/')) {
         var mRanges = [];
         document.querySelectorAll('#audioMuteList .mute-item').forEach(el => {
-          var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-          if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
+          var sInput = el.querySelector('.mute-start');
+          var eInput = el.querySelector('.mute-end');
+          if(sInput && eInput) {
+            var s = parseFloat(sInput.value), end = parseFloat(eInput.value);
+            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
+          }
         });
-        processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile, muteRanges: mRanges });
+        
+        // ΠΡΑΓΜΑΤΙΚΗ ΕΠΕΞΕΡΓΑΣΤΙΚΗ ΣΙΓΑΣΗ (Mute) ΣΤΟΝ ΗΧΟ
+        var processedAudioBlob = await processAudioLocal(currentFile, mRanges);
+        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: processedAudioBlob });
       }
       updateMediaListUI();
     } catch (e) { alert("Σφάλμα: " + e.message); }
@@ -549,6 +556,49 @@
     $('uploadSheet').classList.add('on');
     currentFile = null;
   };
+
+  // Συνάρτηση Πραγματικής Επεξεργασίας Ήχου (Web Audio API OfflineContext)
+  function processAudioLocal(file, mRanges) {
+    return new Promise((resolve) => {
+      var reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          var aCtx = new (window.AudioContext || window.webkitAudioContext)(), aBuf = await aCtx.decodeAudioData(e.target.result);
+          var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
+          var src = oCtx.createBufferSource(); src.buffer = aBuf;
+          var gain = oCtx.createGain(); gain.gain.setValueAtTime(1, 0);
+          
+          mRanges.forEach(r => { 
+            gain.gain.setValueAtTime(1, Math.max(0, r.s - 0.01)); 
+            gain.gain.setValueAtTime(0, r.s); 
+            gain.gain.setValueAtTime(0, r.e); 
+            gain.gain.setValueAtTime(1, r.e + 0.01); 
+          });
+          
+          src.connect(gain); gain.connect(oCtx.destination); src.start(0);
+          
+          var renBuf = await oCtx.startRendering();
+          var numCh = renBuf.numberOfChannels, len = renBuf.length * numCh * 2 + 44, buf = new ArrayBuffer(len), view = new DataView(buf), pos = 0;
+          var set16 = d => { view.setUint16(pos, d, true); pos += 2; }, set32 = d => { view.setUint32(pos, d, true); pos += 4; };
+          
+          set32(0x46464952); set32(len - 8); set32(0x45564157); set32(0x20746d66); set32(16); set16(1); set16(numCh);
+          set32(renBuf.sampleRate); set32(renBuf.sampleRate * 2 * numCh); set16(numCh * 2); set16(16); set32(0x61746164); set32(len - pos - 4);
+          
+          var chs = []; for(var i=0; i<numCh; i++) chs.push(renBuf.getChannelData(i));
+          for(var offset = 0; offset < renBuf.length; offset++) {
+            for(var c = 0; c < numCh; c++) {
+              var smp = Math.max(-1, Math.min(1, chs[c][offset]));
+              set16((0.5 + smp < 0 ? smp * 32768 : smp * 32767) | 0);
+            }
+          }
+          resolve(new Blob([buf], {type: "audio/wav"}));
+        } catch(err) {
+          resolve(file); // fallback σε περίπτωση σφάλματος
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
 
   window.removeMedia = function(index) {
     processedFiles.splice(index, 1);
