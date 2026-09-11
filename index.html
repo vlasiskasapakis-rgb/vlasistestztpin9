@@ -106,7 +106,15 @@
   #imageCanvas { width: 100%; display: block; touch-action: none; }
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
-  #redactBox { position: absolute; border: 3px dashed var(--chalk); background: rgba(240,194,68,0.2); display: none; cursor: move; }
+  .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
+  .range-item .rr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
+  .range-item .rr + .rr { margin-top: 8px; }
+  .range-item input[type="number"] { width: 72px; padding: 6px; border-radius: 4px; border: 1px solid #ccc; font-size: 15px; }
+  .range-item label { display: flex; align-items: center; gap: 5px; font-weight: 600; color: var(--ink); }
+  .range-item input[type="checkbox"] { width: 20px; height: 20px; }
+  .nowbtn { background: var(--sea); color: var(--bone); padding: 6px 9px; font-size: 12px; border-radius: 4px; }
+  .delrow { margin-left: auto; background: #d9534f; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 4px; }
+  #vTimeNow { font-family: monospace; font-size: 13px; color: var(--sea); margin: 6px 0 10px; }
 
   .mute-list { background: #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; color: #333; }
   .mute-item { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
@@ -198,13 +206,13 @@
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline preload="metadata"></video>
-        <div id="redactBox"></div>
       </div>
-      <p style="font-size:12px; color:var(--sea); margin:8px 0;">*Σύρε το πλαίσιο στο βίντεο για να επιλέξεις περιοχή θολώματος (Blur).</p>
+      <div id="vTimeNow">Τρέχον σημείο: 0.0s</div>
 
-      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Σημεία Σίγασης Ήχου στο Βίντεο (Mute):</label>
-      <div id="videoMuteList" class="mute-list"></div>
-      <button onclick="addVideoMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Σημείου Mute</button>
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block;">Διαστήματα επεξεργασίας</label>
+      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Παίξε το βίντεο, πάτα «τώρα» για να πιάσεις το σημείο, και διάλεξε σίγαση, θόλωμα ή και τα δύο.</p>
+      <div id="videoRangeList"></div>
+      <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
     <!-- Editor Ήχου (Mute) -->
@@ -467,7 +475,7 @@
   var imageHistory = [];
   var MAX_HISTORY = 15;
 
-  var vContainer = $('videoContainer'), redactBox = $('redactBox'), isDraggingBox = false, boxRect = {x:0,y:0,w:0,h:0}, startDrag = {x:0,y:0};
+  var vContainer = $('videoContainer');
 
   // Ένα μόνο AudioContext + ένα μόνο MediaElementSource για όλη τη ζωή της σελίδας
   var _actx = null, _vSrc = null, _vGain = null, _vDest = null;
@@ -499,13 +507,53 @@
     $('audioMuteList').appendChild(div);
   };
 
-  window.addVideoMuteRow = function() {
-    var div = document.createElement('div'); div.className = 'mute-item';
-    div.innerHTML = `Από: <input type="number" step="1" min="0" class="vmute-start">s 
-                     Έως: <input type="number" step="1" min="0" class="vmute-end">s 
-                     <button onclick="this.parentElement.remove()" style="color:red; background:none; font-weight:bold;">X</button>`;
-    $('videoMuteList').appendChild(div);
-  };
+  function addVideoRangeRow(start, end) {
+    var div = document.createElement('div'); div.className = 'range-item';
+    div.innerHTML =
+      '<div class="rr">' +
+        'Από <input type="number" step="0.1" min="0" class="r-start" value="' + (start != null ? start : '') + '">s ' +
+        '<button class="nowbtn" data-field="r-start">τώρα</button>' +
+        'έως <input type="number" step="0.1" min="0" class="r-end" value="' + (end != null ? end : '') + '">s ' +
+        '<button class="nowbtn" data-field="r-end">τώρα</button>' +
+        '<button class="delrow">✕</button>' +
+      '</div>' +
+      '<div class="rr">' +
+        '<label><input type="checkbox" class="r-mute" checked> Σίγαση ήχου</label>' +
+        '<label><input type="checkbox" class="r-blur"> Θόλωμα εικόνας</label>' +
+      '</div>';
+    $('videoRangeList').appendChild(div);
+  }
+
+  $('addRangeBtn').onclick = function () { addVideoRangeRow(); };
+
+  // Ένας listener για όλες τις σειρές
+  $('videoRangeList').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    if (b.classList.contains('delrow')) { b.closest('.range-item').remove(); return; }
+    if (b.classList.contains('nowbtn')) {
+      var row = b.closest('.range-item');
+      row.querySelector('.' + b.dataset.field).value = ($('videoPreview').currentTime || 0).toFixed(1);
+    }
+  });
+
+  $('videoPreview').addEventListener('timeupdate', function () {
+    $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's';
+  });
+
+  // Διαβάζει τα διαστήματα από το UI
+  function readVideoRanges() {
+    var out = [];
+    document.querySelectorAll('#videoRangeList .range-item').forEach(function (row) {
+      var s = parseFloat(row.querySelector('.r-start').value);
+      var e = parseFloat(row.querySelector('.r-end').value);
+      if (isNaN(s) || isNaN(e) || e <= s) return;
+      var mute = row.querySelector('.r-mute').checked;
+      var blur = row.querySelector('.r-blur').checked;
+      if (!mute && !blur) return;
+      out.push({ s: s, e: e, mute: mute, blur: blur });
+    });
+    return out;
+  }
 
   window.cancelStory = function() {
     $('uploadSheet').classList.remove('on');
@@ -531,9 +579,8 @@
     $('imageEditor').style.display = 'none';
     $('videoEditor').style.display = 'none';
     $('audioEditor').style.display = 'none';
-    redactBox.style.display = 'none';
     $('audioMuteList').innerHTML = '';
-    $('videoMuteList').innerHTML = '';
+    $('videoRangeList').innerHTML = '';
 
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(currentFile);
@@ -560,8 +607,9 @@
     }
     else if(currentFile.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block';
-      var vid = $('videoPreview'); vid.src = currentObjectURL; boxRect = {x:0,y:0,w:0,h:0};
-      window.addVideoMuteRow();
+      var vid = $('videoPreview'); vid.src = currentObjectURL;
+      $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
+      addVideoRangeRow();
     }
     else if(currentFile.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block';
@@ -596,22 +644,6 @@
   $('undoBlurBtn').onclick = () => {
     if (imageHistory.length > 0) ctx.putImageData(imageHistory.pop(), 0, 0);
   };
-
-  // Redact Box Βίντεο (Για την περιοχή θολώματος)
-  vContainer.onpointerdown = e => {
-    if (e.target.id === 'videoPreview' && e.offsetY > e.target.clientHeight - 40) return; // μην κλέβεις τα controls
-    isDraggingBox = true; var rect = vContainer.getBoundingClientRect(); startDrag = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    boxRect = {x: startDrag.x, y: startDrag.y, w: 0, h: 0};
-    redactBox.style.display = 'block'; redactBox.style.left = boxRect.x+'px'; redactBox.style.top = boxRect.y+'px';
-    vContainer.setPointerCapture(e.pointerId);
-  };
-  vContainer.onpointermove = e => {
-    if(!isDraggingBox) return; var rect = vContainer.getBoundingClientRect();
-    var curX = Math.max(0, Math.min(e.clientX - rect.left, rect.width)), curY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-    boxRect.x = Math.min(startDrag.x, curX); boxRect.y = Math.min(startDrag.y, curY); boxRect.w = Math.abs(curX - startDrag.x); boxRect.h = Math.abs(curY - startDrag.y);
-    redactBox.style.left = boxRect.x+'px'; redactBox.style.top = boxRect.y+'px'; redactBox.style.width = boxRect.w+'px'; redactBox.style.height = boxRect.h+'px';
-  };
-  vContainer.onpointerup = () => isDraggingBox = false;
 
   $('cancelSingleBtn').onclick = () => {
     currentFile = null;
@@ -732,29 +764,24 @@
   };
 
   // --- Επεξεργαστής Βίντεο ---
-  // Κλειδί της ταχύτητας: θολώνουμε ΜΟΝΟ το πλαίσιο (με downscale/upscale, όχι ctx.filter),
-  // γράφουμε σε μικρότερη ανάλυση, και δεν ξαναγράφουμε καθόλου αν δεν υπάρχει αλλαγή.
+  // Διαστήματα χρόνου: σίγαση ήχου, θόλωμα ολόκληρης της εικόνας, ή και τα δύο.
+  // Το θόλωμα γίνεται με downscale/upscale, όχι με ctx.filter, ώστε να μην πέφτουν frames.
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
       var video = $('videoPreview');
+      var ranges = readVideoRanges();
 
-      var vmRanges = [];
-      document.querySelectorAll('#videoMuteList .mute-item').forEach(function (el) {
-        var s = parseFloat(el.querySelector('.vmute-start').value);
-        var e2 = parseFloat(el.querySelector('.vmute-end').value);
-        if (!isNaN(s) && !isNaN(e2) && e2 > s) vmRanges.push({ s: s, e: e2 });
-      });
-
-      var hasBox = boxRect.w > 6 && boxRect.h > 6;
-
-      // 1) Τίποτα να αλλάξει; Κρατάμε το πρωτότυπο. Μηδέν χρόνος επεξεργασίας.
-      if (!hasBox && vmRanges.length === 0) { resolve(file); return; }
+      // Τίποτα να αλλάξει; Κρατάμε το πρωτότυπο, μηδέν χρόνος.
+      if (ranges.length === 0) { resolve(file); return; }
 
       if (!window.MediaRecorder) { resolve(file); return; }
       var mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4',
                   'video/webm;codecs=vp8,opus', 'video/webm']
         .filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
       if (!mime) { reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); return; }
+
+      var blurRanges = ranges.filter(function (r) { return r.blur; });
+      var muteRanges = ranges.filter(function (r) { return r.mute; });
 
       var vw = video.videoWidth || 640, vh = video.videoHeight || 480;
       var k = Math.min(1, MAX_VIDEO_W / vw);
@@ -766,87 +793,114 @@
       var oCtx = oCanvas.getContext('2d', { alpha: false });
       oCtx.imageSmoothingEnabled = true;
 
-      // Συντεταγμένες πλαισίου -> ποσοστά -> pixels σε source & output
-      var vRect = vContainer.getBoundingClientRect();
-      var pX = hasBox ? boxRect.x / vRect.width : 0;
-      var pY = hasBox ? boxRect.y / vRect.height : 0;
-      var pW = hasBox ? boxRect.w / vRect.width : 0;
-      var pH = hasBox ? boxRect.h / vRect.height : 0;
-
-      var sx = pX * vw, sy = pY * vh, sw = Math.max(1, pW * vw), sh = Math.max(1, pH * vh);
-      var dx = pX * ow, dy = pY * oh, dw = Math.max(1, pW * ow), dh = Math.max(1, pH * oh);
-
-      // Μικροσκοπικός βοηθητικός καμβάς: downscale -> upscale = θόλωμα σχεδόν δωρεάν
+      // Μικροσκοπικός καμβάς: το downscale εδώ και το upscale πίσω δίνει βαρύ θόλωμα σχεδόν δωρεάν
       var scratch = document.createElement('canvas');
-      var tw = 18, th = Math.max(1, Math.round(tw * (sh / sw)));
+      var tw = 24, th = Math.max(1, Math.round(tw * vh / vw));
       scratch.width = tw; scratch.height = th;
       var sctx = scratch.getContext('2d', { alpha: false });
       sctx.imageSmoothingEnabled = true;
 
-      // Ήχος: ένα graph για όλη τη σελίδα, με reset στα gain κάθε φορά
-      var stream, g = null;
-      try {
-        g = videoAudioGraph();
-        g.gain.gain.cancelScheduledValues(0);
-        g.gain.gain.setValueAtTime(1, 0);
-        vmRanges.forEach(function (r) {
-          g.gain.gain.setValueAtTime(1, Math.max(0, r.s - 0.01));
-          g.gain.gain.setValueAtTime(0, r.s);
-          g.gain.gain.setValueAtTime(0, r.e);
-          g.gain.gain.setValueAtTime(1, r.e + 0.01);
-        });
-      } catch (e) { g = null; }
+      var g = null;
+      try { g = videoAudioGraph(); g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
+      catch (e) { g = null; }
 
       var vTracks = oCanvas.captureStream(30).getVideoTracks();
       var aTracks = (g && g.dest.stream.getAudioTracks()) || [];
-      stream = new MediaStream(vTracks.concat(aTracks));
+      var stream = new MediaStream(vTracks.concat(aTracks));
 
       var rec;
-      try {
-        rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE });
-      } catch (e) { reject(new Error('MediaRecorder: ' + e.message)); return; }
+      try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); }
+      catch (e) { reject(new Error('MediaRecorder: ' + e.message)); return; }
 
-      var chunks = [], running = true, finished = false;
+      var chunks = [], running = true, finished = false, lastUI = 0;
       rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
       rec.onstop = function () {
         if (finished) return; finished = true;
         running = false;
         try { video.pause(); } catch (e) {}
         video.onended = null;
+        if (g) { g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
 
       function drawFrame() {
-        oCtx.drawImage(video, 0, 0, ow, oh);
-        if (hasBox) {
-          sctx.drawImage(video, sx, sy, sw, sh, 0, 0, tw, th);
-          oCtx.drawImage(scratch, 0, 0, tw, th, dx, dy, dw, dh);
+        var t = video.currentTime, blurNow = false;
+        for (var i = 0; i < blurRanges.length; i++) {
+          if (t >= blurRanges[i].s && t < blurRanges[i].e) { blurNow = true; break; }
         }
+        if (blurNow) {
+          sctx.drawImage(video, 0, 0, tw, th);
+          oCtx.drawImage(scratch, 0, 0, tw, th, 0, 0, ow, oh);
+        } else {
+          oCtx.drawImage(video, 0, 0, ow, oh);
+        }
+      }
+
+      function nextFrame(fn) {
+        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(function () { fn(); });
+        else requestAnimationFrame(fn);
       }
 
       function loop() {
         if (!running) return;
         drawFrame();
-        if (video.duration && isFinite(video.duration)) {
-          var pct = video.currentTime / video.duration * 100;
-          showProgress(true, 'Εγγραφή: ' + Math.round(video.currentTime) + 's / ' + Math.round(video.duration) + 's', pct);
+        var now = performance.now();
+        if (now - lastUI > 250) {   // το UI δεν ενημερώνεται σε κάθε frame, κοστίζει
+          lastUI = now;
+          if (video.duration && isFinite(video.duration)) {
+            showProgress(true, 'Εγγραφή: ' + Math.round(video.currentTime) + 's / ' + Math.round(video.duration) + 's',
+                         video.currentTime / video.duration * 100);
+          }
         }
-        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(loop);
-        else requestAnimationFrame(loop);
+        nextFrame(loop);
       }
 
       function stopAll() { if (rec.state !== 'inactive') rec.stop(); }
 
-      video.onended = stopAll;
-      video.currentTime = 0;
-      var p = video.play();
-      Promise.resolve(p).then(function () {
-        if (g && g.ctx.state === 'suspended') g.ctx.resume();
-        rec.start(1000);
-        loop();
+      // --- Προθέρμανση: γεμίζουμε τον καμβά και αφήνουμε τον decoder να πιάσει ρυθμό
+      // ΠΡΙΝ ξεκινήσει ο recorder. Αλλιώς τα πρώτα δευτερόλεπτα βγαίνουν "καρέ-καρέ".
+      function seekToStart() {
+        return new Promise(function (res) {
+          var done = false, go = function () { if (!done) { done = true; res(); } };
+          if (video.readyState >= 2 && video.currentTime < 0.05) { go(); return; }
+          video.addEventListener('seeked', go, { once: true });
+          video.currentTime = 0;
+          setTimeout(go, 1200);
+        });
+      }
+
+      showProgress(true, 'Προθέρμανση…', 0);
+
+      seekToStart().then(function () {
+        drawFrame();                       // ο καμβάς δεν είναι ποτέ άδειος στο πρώτο frame
+        return Promise.resolve(video.play());
+      }).then(function () {
+        if (g && g.ctx.state === 'suspended') return g.ctx.resume();
+      }).then(function () {
+        var primed = 0;
+        (function prime() {
+          drawFrame();
+          if (++primed < 4) { nextFrame(prime); return; }
+
+          // Χρονισμός ήχου: το gain δουλεύει σε χρόνο AudioContext, όχι βίντεο.
+          if (g && muteRanges.length) {
+            var t0 = g.ctx.currentTime - video.currentTime;   // πότε ήταν το 0:00 του βίντεο
+            var gv = g.gain.gain;
+            gv.cancelScheduledValues(0);
+            gv.setValueAtTime(1, g.ctx.currentTime);
+            muteRanges.forEach(function (r) {
+              gv.setValueAtTime(0, Math.max(g.ctx.currentTime, t0 + r.s));
+              gv.setValueAtTime(1, t0 + r.e);
+            });
+          }
+
+          video.onended = stopAll;
+          rec.start(1000);
+          loop();
+        })();
       }).catch(function (err) {
         running = false;
-        reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + err.message));
+        reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + (err && err.message ? err.message : err)));
       });
     });
   }
