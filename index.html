@@ -111,6 +111,7 @@
   #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
   .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
   .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
+  .timeline-block.mute { background: rgba(217, 83, 79, 0.85); }
 
   .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
   .range-item .rr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
@@ -207,27 +208,25 @@
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
-    <!-- Editor Βίντεο (Blur Area, Mute Points & Visual Timeline) -->
+    <!-- Editor Βίντεο -->
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline preload="metadata"></video>
       </div>
-      <!-- Οπτική Μπάρα Timeline -->
-      <div id="videoTimeline" title="Οπτική προεπισκόπηση διαστημάτων"></div>
-      
+      <div id="videoTimeline" class="media-timeline" title="Timeline βίντεο"></div>
       <div id="vTimeNow">Τρέχον σημείο: 0.0s</div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea); display:block;">Διαστήματα επεξεργασίας (Stamps)</label>
-      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Τα σημεία εμφανίζονται οπτικά στη μπάρα παραπάνω.</p>
       <div id="videoRangeList"></div>
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
-    <!-- Editor Ήχου (Mute) -->
+    <!-- Editor Ήχου -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
-      <audio id="audioPreview" controls style="width:100%; margin-bottom:10px;"></audio>
+      <audio id="audioPreview" controls style="width:100%; margin-bottom:6px;"></audio>
+      <div id="audioTimeline" class="media-timeline" title="Timeline ήχου"></div>
+
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
-      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Όρισε τα σημεία που θέλεις να σιγάσεις:</p>
       <div id="audioMuteList"></div>
       <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη σημείου σίγασης</button>
     </div>
@@ -244,7 +243,7 @@
   <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία…</h3>
   <p id="procMsg" style="font-size:14px; margin:0;">Παρακαλώ περιμένετε…</p>
   <div id="procBar"><div id="procBarFill"></div></div>
-  <p style="font-size:12px; opacity:.7; margin-top:14px;">Εφαρμογή όλων των ρυθμίσεων. Μην κλειδώσεις την οθόνη.</p>
+  <p style="font-size:12px; opacity:.7; margin-top:14px;">Εφαρμογή ρυθμίσεων. Μην κλειδώσεις την οθόνη.</p>
 </div>
 
 <!-- 3. Μενού Τοπικής Προβολής Αρχείων -->
@@ -466,7 +465,7 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με Visual Timeline & διορθωμένο updateMediaListUI)
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με iOS-safe Blur)
   // ==========================================
   var MAX_IMAGE_W = 1600;  
   var MAX_VIDEO_W = 640;     
@@ -483,31 +482,14 @@
   var imageHistory = [];
   var MAX_HISTORY = 15;
 
-  var vContainer = $('videoContainer');
-
-  var _actx = null, _vSrc = null, _vGain = null, _vDest = null;
-  function videoAudioGraph() {
-    var video = $('videoPreview');
-    if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
-    if (!_vSrc) {
-      _vSrc = _actx.createMediaElementSource(video);
-      _vGain = _actx.createGain();
-      _vDest = _actx.createMediaStreamDestination();
-      _vSrc.connect(_vGain);
-      _vGain.connect(_vDest);
-      _vGain.connect(_actx.destination);
-    }
-    return { ctx: _actx, gain: _vGain, dest: _vDest };
-  }
-
   function showProgress(on, msg, pct) {
     $('processingOverlay').style.display = on ? 'flex' : 'none';
     if (msg != null) $('procMsg').textContent = msg;
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  // --- Ενημέρωση Οπτικού Timeline ---
-  function updateTimeline() {
+  // --- Ενημέρωση Timeline Βίντεο ---
+  function updateVideoTimeline() {
     var timeline = $('videoTimeline');
     if (!timeline) return;
     timeline.innerHTML = '';
@@ -533,22 +515,55 @@
     });
   }
 
-  // --- Σημεία Ήχου ---
+  // --- Ενημέρωση Timeline Ήχου ---
+  function updateAudioTimeline() {
+    var timeline = $('audioTimeline');
+    if (!timeline) return;
+    timeline.innerHTML = '';
+    var audio = $('audioPreview');
+    var duration = audio.duration;
+    if (!duration || isNaN(duration) || duration <= 0) return;
+
+    document.querySelectorAll('#audioMuteList .mute-item').forEach(function(row) {
+      var s = parseFloat(row.querySelector('.mute-start').value);
+      var e = parseFloat(row.querySelector('.mute-end').value);
+
+      if (isNaN(s) || isNaN(e) || e <= s) return;
+
+      var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
+      var widthPct = Math.max(0, Math.min(100 - leftPct, ((e - s) / duration) * 100));
+
+      var block = document.createElement('div');
+      block.className = 'timeline-block mute';
+      block.style.left = leftPct + '%';
+      block.style.width = widthPct + '%';
+      timeline.appendChild(block);
+    });
+  }
+
+  // --- Διαχείριση Σημείων Ήχου (Stamps) ---
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
-    div.innerHTML = `Από: <input type="number" step="1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
-                     Έως: <input type="number" step="1" min="0" class="mute-end" value="${end != null ? end : ''}">s 
+    div.innerHTML = `Από: <input type="number" step="0.1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
+                     Έως: <input type="number" step="0.1" min="0" class="mute-end" value="${end != null ? end : ''}">s 
                      <button class="delrow" style="margin-left:auto; background:#d9534f; color:#fff; padding:4px 8px; font-size:12px; border-radius:4px;">✕</button>`;
     $('audioMuteList').appendChild(div);
+    updateAudioTimeline();
   }
 
   $('addAudioRangeBtn').onclick = function() { addAudioMuteRow(); };
+  
   $('audioMuteList').addEventListener('click', function(e) {
     var b = e.target.closest('button');
-    if (b && b.classList.contains('delrow')) b.closest('.mute-item').remove();
+    if (b && b.classList.contains('delrow')) {
+      b.closest('.mute-item').remove();
+      updateAudioTimeline();
+    }
   });
+  $('audioMuteList').addEventListener('input', function() { updateAudioTimeline(); });
+  $('audioMuteList').addEventListener('change', function() { updateAudioTimeline(); });
 
-  // --- Διαστήματα Βίντεο ---
+  // --- Διαστήματα Βίντεο (Stamps) ---
   function addVideoRangeRow(start, end, mute, blur) {
     var div = document.createElement('div'); div.className = 'range-item';
     div.innerHTML =
@@ -564,23 +579,23 @@
         '<label><input type="checkbox" class="r-blur"' + (blur ? ' checked' : '') + '> Θόλωμα</label>' +
       '</div>';
     $('videoRangeList').appendChild(div);
-    updateTimeline();
+    updateVideoTimeline();
   }
 
   $('addRangeBtn').onclick = function () { addVideoRangeRow(); };
 
   $('videoRangeList').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
-    if (b.classList.contains('delrow')) { b.closest('.range-item').remove(); updateTimeline(); return; }
+    if (b.classList.contains('delrow')) { b.closest('.range-item').remove(); updateVideoTimeline(); return; }
     if (b.classList.contains('nowbtn')) {
       var row = b.closest('.range-item');
       row.querySelector('.' + b.dataset.field).value = ($('videoPreview').currentTime || 0).toFixed(1);
-      updateTimeline();
+      updateVideoTimeline();
     }
   });
 
-  $('videoRangeList').addEventListener('input', function() { updateTimeline(); });
-  $('videoRangeList').addEventListener('change', function() { updateTimeline(); });
+  $('videoRangeList').addEventListener('input', function() { updateVideoTimeline(); });
+  $('videoRangeList').addEventListener('change', function() { updateVideoTimeline(); });
 
   $('videoPreview').addEventListener('timeupdate', function () {
     $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's';
@@ -611,7 +626,8 @@
   $('addBtn').onclick = () => { if(me) { $('uploadSheet').classList.add('on'); setAR(false); } };
   $('triggerFileBtn').onclick = () => $('singleFileInput').click();
 
-  function loadFileIntoEditor(file) {
+  // Φόρτωση αρχείου στον editor
+  function loadFileIntoEditor(file, savedMeta) {
     currentFile = file;
     setAR(false);
     $('uploadSheet').classList.remove('on');
@@ -624,6 +640,7 @@
     $('audioMuteList').innerHTML = '';
     $('videoRangeList').innerHTML = '';
     if ($('videoTimeline')) $('videoTimeline').innerHTML = '';
+    if ($('audioTimeline')) $('audioTimeline').innerHTML = '';
 
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(file);
@@ -638,11 +655,19 @@
         canvas.height = Math.round(imgObj.height * k);
         ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
 
-        blurSrc.width = canvas.width; blurSrc.height = canvas.height;
+        blurSrc.width = canvas.width; 
+        blurSrc.height = canvas.height;
         var bctx = blurSrc.getContext('2d');
-        bctx.filter = 'blur(14px)';
+        
+        // Σχεδίαση και iOS-safe blur
         bctx.drawImage(canvas, 0, 0);
-        bctx.filter = 'none';
+        try {
+          bctx.filter = 'blur(16px)';
+          bctx.drawImage(blurSrc, 0, 0);
+          bctx.filter = 'none';
+        } catch(err) {
+          bctx.drawImage(canvas, 0, 0, blurSrc.width, blurSrc.height);
+        }
       };
       imgObj.src = currentObjectURL;
     }
@@ -654,14 +679,27 @@
       vid.load();
       vid.onloadedmetadata = function() {
         $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
-        updateTimeline();
+        if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
+          savedMeta.ranges.forEach(r => addVideoRangeRow(r.s, r.e, r.mute, r.blur));
+        } else {
+          addVideoRangeRow();
+        }
+        updateVideoTimeline();
       };
-      addVideoRangeRow();
     }
     else if(file.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block';
-      $('audioPreview').src = currentObjectURL; 
-      addAudioMuteRow();
+      var aud = $('audioPreview');
+      aud.src = currentObjectURL;
+      aud.load();
+      aud.onloadedmetadata = function() {
+        if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
+          savedMeta.ranges.forEach(r => addAudioMuteRow(r.s, r.e));
+        } else {
+          addAudioMuteRow();
+        }
+        updateAudioTimeline();
+      };
     }
   }
 
@@ -669,7 +707,7 @@
     if(this.files.length === 0) return;
     var f = this.files[0];
     this.value = '';
-    loadFileIntoEditor(f);
+    loadFileIntoEditor(f, null);
   };
 
   function getMousePos(e) {
@@ -701,7 +739,7 @@
 
   $('cancelSingleBtn').onclick = () => {
     currentFile = null;
-    try { $('videoPreview').pause(); } catch(e){}
+    try { $('videoPreview').pause(); $('audioPreview').pause(); } catch(e){}
     $('editorSheet').classList.remove('on');
     $('uploadSheet').classList.add('on');
   };
@@ -711,17 +749,27 @@
     showProgress(true, 'Επεξεργασία αρχείου…', 0);
 
     try {
+      var savedMeta = { ranges: [] };
+      if (currentFile.type.startsWith('video/')) {
+        savedMeta.ranges = readVideoRanges();
+      } else if (currentFile.type.startsWith('audio/')) {
+        document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
+          var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
+          if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
+        });
+      }
+
       if (currentFile.type.startsWith('image/')) {
         var blob = await new Promise(function(res){ canvas.toBlob(res, 'image/jpeg', 0.82); });
-        processedFiles.push({ name: currentFile.name, type: 'image/jpeg', blob: blob });
+        processedFiles.push({ name: currentFile.name, type: 'image/jpeg', blob: blob, meta: savedMeta });
       }
       else if (currentFile.type.startsWith('video/')) {
         var vblob = await processVideoLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob });
+        processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
       }
       else if (currentFile.type.startsWith('audio/')) {
         var ablob = await processAudioLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: ablob });
+        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: ablob, meta: savedMeta });
       }
       updateMediaListUI();
     } catch (e) {
@@ -739,7 +787,6 @@
     updateMediaListUI();
   };
 
-  // ΕΠΑΝΑΦΟΡΑ ΤΗΣ ΣΥΝΑΡΤΗΣΗΣ updateMediaListUI ΓΙΑ ΝΑ ΜΗΝ ΧΤΥΠΑΕΙ ΣΦΑΛΜΑ
   function updateMediaListUI() {
     var list = $('mediaList');
     if (processedFiles.length === 0) {
@@ -759,7 +806,7 @@
     if (!f) return;
     $('previewSheet').classList.remove('on');
     var fileObj = new File([f.blob], f.name, { type: f.type });
-    loadFileIntoEditor(fileObj);
+    loadFileIntoEditor(fileObj, f.meta);
     processedFiles.splice(index, 1);
   };
 
