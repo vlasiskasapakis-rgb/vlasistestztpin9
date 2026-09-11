@@ -107,11 +107,6 @@
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
   
-  /* Timeline Σχεδίαση */
-  #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
-  .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
-  .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
-
   .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
   .range-item .rr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
   .range-item .rr + .rr { margin-top: 8px; }
@@ -122,6 +117,7 @@
   .delrow { margin-left: auto; background: #d9534f; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 4px; }
   #vTimeNow { font-family: monospace; font-size: 13px; color: var(--sea); margin: 6px 0 10px; }
 
+  .mute-list { background: #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; color: #333; }
   .mute-item { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; color: #333; }
   .mute-item input[type="number"] { width: 68px; padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
 
@@ -207,18 +203,15 @@
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
-    <!-- Editor Βίντεο (Blur Area, Mute Points & Visual Timeline) -->
+    <!-- Editor Βίντεο (Blur Area & Mute Points) -->
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline preload="metadata"></video>
       </div>
-      <!-- Οπτική Μπάρα Timeline -->
-      <div id="videoTimeline" title="Οπτική προεπισκόπηση διαστημάτων"></div>
-      
       <div id="vTimeNow">Τρέχον σημείο: 0.0s</div>
 
-      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block;">Διαστήματα επεξεργασίας (Stamps)</label>
-      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Τα σημεία εμφανίζονται οπτικά στη μπάρα παραπάνω.</p>
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block;">Διαστήματα επεξεργασίας</label>
+      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Παίξε το βίντεο, πάτα «τώρα» για να πιάσεις το σημείο, και διάλεξε σίγαση, θόλωμα ή και τα δύο.</p>
       <div id="videoRangeList"></div>
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
@@ -226,8 +219,8 @@
     <!-- Editor Ήχου (Mute) -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
       <audio id="audioPreview" controls style="width:100%; margin-bottom:10px;"></audio>
-      <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
-      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Όρισε τα σημεία που θέλεις να σιγάσεις:</p>
+      <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Mute):</label>
+      <p style="font-size:12px; color:#666; margin:4px 0 10px;">Πρόσθεσε ή αφαίρεσε συνολικά τα σημεία σίγασης:</p>
       <div id="audioMuteList"></div>
       <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη σημείου σίγασης</button>
     </div>
@@ -241,10 +234,10 @@
 
 <!-- Overlay επεξεργασίας -->
 <div id="processingOverlay">
-  <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία…</h3>
-  <p id="procMsg" style="font-size:14px; margin:0;">Παρακαλώ περιμένετε…</p>
+  <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία...</h3>
+  <p id="procMsg" style="font-size:14px; margin:0;">Προετοιμασία…</p>
   <div id="procBar"><div id="procBarFill"></div></div>
-  <p style="font-size:12px; opacity:.7; margin-top:14px;">Εφαρμογή όλων των ρυθμίσεων. Μην κλειδώσεις την οθόνη.</p>
+  <p style="font-size:12px; opacity:.7; margin-top:14px;">Το βίντεο γράφεται σε πραγματικό χρόνο. Μην κλειδώσεις την οθόνη.</p>
 </div>
 
 <!-- 3. Μενού Τοπικής Προβολής Αρχείων -->
@@ -466,7 +459,7 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με Visual Timeline)
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Βελτιστοποιημένος)
   // ==========================================
   var MAX_IMAGE_W = 1600;  
   var MAX_VIDEO_W = 640;     
@@ -506,33 +499,7 @@
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  // --- Ενημέρωση Οπτικού Timeline ---
-  function updateTimeline() {
-    var timeline = $('videoTimeline');
-    timeline.innerHTML = '';
-    var video = $('videoPreview');
-    var duration = video.duration;
-    if (!duration || isNaN(duration) || duration <= 0) return;
-
-    document.querySelectorAll('#videoRangeList .range-item').forEach(function(row) {
-      var s = parseFloat(row.querySelector('.r-start').value);
-      var e = parseFloat(row.querySelector('.r-end').value);
-      var blur = row.querySelector('.r-blur').checked;
-
-      if (isNaN(s) || isNaN(e) || e <= s) return;
-
-      var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
-      var widthPct = Math.max(0, Math.min(100 - leftPct, ((e - s) / duration) * 100));
-
-      var block = document.createElement('div');
-      block.className = 'timeline-block' + (blur ? ' blur' : '');
-      block.style.left = leftPct + '%';
-      block.style.width = widthPct + '%';
-      timeline.appendChild(block);
-    });
-  }
-
-  // --- Σημεία Ήχου ---
+  // --- Διαχείριση Σημείων Ήχου (Audio Mute Stamps) ---
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
     div.innerHTML = `Από: <input type="number" step="1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
@@ -542,12 +509,15 @@
   }
 
   $('addAudioRangeBtn').onclick = function() { addAudioMuteRow(); };
+
   $('audioMuteList').addEventListener('click', function(e) {
     var b = e.target.closest('button');
-    if (b && b.classList.contains('delrow')) b.closest('.mute-item').remove();
+    if (b && b.classList.contains('delrow')) {
+      b.closest('.mute-item').remove();
+    }
   });
 
-  // --- Διαστήματα Βίντεο ---
+  // --- Διαχείριση Διαστημάτων Βίντεο ---
   function addVideoRangeRow(start, end, mute, blur) {
     var div = document.createElement('div'); div.className = 'range-item';
     div.innerHTML =
@@ -559,27 +529,22 @@
         '<button class="delrow">✕</button>' +
       '</div>' +
       '<div class="rr">' +
-        '<label><input type="checkbox" class="r-mute"' + (mute !== false ? ' checked' : '') + '> Σίγαση</label>' +
-        '<label><input type="checkbox" class="r-blur"' + (blur ? ' checked' : '') + '> Θόλωμα</label>' +
+        '<label><input type="checkbox" class="r-mute"' + (mute !== false ? ' checked' : '') + '> Σίγαση ήχου</label>' +
+        '<label><input type="checkbox" class="r-blur"' + (blur ? ' checked' : '') + '> Θόλωμα εικόνας</label>' +
       '</div>';
     $('videoRangeList').appendChild(div);
-    updateTimeline();
   }
 
   $('addRangeBtn').onclick = function () { addVideoRangeRow(); };
 
   $('videoRangeList').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
-    if (b.classList.contains('delrow')) { b.closest('.range-item').remove(); updateTimeline(); return; }
+    if (b.classList.contains('delrow')) { b.closest('.range-item').remove(); return; }
     if (b.classList.contains('nowbtn')) {
       var row = b.closest('.range-item');
       row.querySelector('.' + b.dataset.field).value = ($('videoPreview').currentTime || 0).toFixed(1);
-      updateTimeline();
     }
   });
-
-  $('videoRangeList').addEventListener('input', function() { updateTimeline(); });
-  $('videoRangeList').addEventListener('change', function() { updateTimeline(); });
 
   $('videoPreview').addEventListener('timeupdate', function () {
     $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's';
@@ -622,7 +587,6 @@
     $('audioEditor').style.display = 'none';
     $('audioMuteList').innerHTML = '';
     $('videoRangeList').innerHTML = '';
-    $('videoTimeline').innerHTML = '';
 
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(file);
@@ -653,7 +617,6 @@
       vid.load();
       vid.onloadedmetadata = function() {
         $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
-        updateTimeline();
       };
       addVideoRangeRow();
     }
@@ -707,7 +670,7 @@
 
   $('saveFileBtn').onclick = async function() {
     if (!currentFile) return;
-    showProgress(true, 'Επεξεργασία αρχείου…', 0);
+    showProgress(true, 'Προετοιμασία…', 0);
 
     try {
       if (currentFile.type.startsWith('image/')) {
@@ -737,6 +700,20 @@
     processedFiles.splice(index, 1);
     updateMediaListUI();
   };
+
+  function updateMediaListUI() {
+    var list = $('mediaList');
+    if (processedFiles.length === 0) {
+      list.innerHTML = '<p style="font-size:13px; color:#666; margin:0;">Δεν έχεις προσθέσει αρχεία ακόμα.</p>';
+      return;
+    }
+    var html = '';
+    processedFiles.forEach((f, i) => {
+      var kb = f.blob ? Math.round(f.blob.size/1024) : 0;
+      html += `<div class="media-list-item"><span>${i+1}. ${f.name} <small style="color:#666">(${kb} KB)</small></span><div><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div></div>`;
+    });
+    list.innerHTML = html;
+  }
 
   window.editSavedMedia = function(index) {
     var f = processedFiles[index];
@@ -972,7 +949,7 @@
     });
   }
 
-  // --- Επεξεργαστής Ήχου ---
+  // --- Επεξεργαστής Ήχου (Mute points συνολικά) ---
   function processAudioLocal(file) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
