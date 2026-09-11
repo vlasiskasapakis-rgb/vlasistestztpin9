@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>1 Διαδρομή μνήμης — Μυτιλήνη (AR & Local Editor)</title>
+<title>Διαδρομή μνήμης — Μυτιλήνη (AR & Local Editor)</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
@@ -128,7 +128,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>1 Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -459,8 +459,8 @@
   // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Βελτιστοποιημένος)
   // ==========================================
   var MAX_IMAGE_W = 1600;  
-  var MAX_VIDEO_W = 640;     // Μειωμένο στα 640px για μικρότερο μέγεθος αρχείου
-  var VIDEO_BITRATE = 1000000; // Μειωμένο στο 1 Mbps
+  var MAX_VIDEO_W = 640;     
+  var VIDEO_BITRATE = 1000000; 
 
   var processedFiles = [];
   var currentFile = null;
@@ -753,17 +753,28 @@
     setAR(true);
   };
 
-  // --- Επεξεργαστής Βίντεο (Με βελτιστοποιημένο VP9 & 1Mbps) ---
+  // --- Επεξεργαστής Βίντεο (Με παύση AR για αποφυγή κολλημάτων) ---
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
+      
+      // Κόβουμε εντελώς την κάμερα και την AR σκηνή για να ελευθερωθεί η GPU!
+      setAR(false);
+
       var video = $('videoPreview');
       var ranges = readVideoRanges();
 
-      if (ranges.length === 0) { resolve(file); return; }
+      if (ranges.length === 0) { 
+        setAR(true); 
+        resolve(file); 
+        return; 
+      }
 
-      if (!window.MediaRecorder) { resolve(file); return; }
+      if (!window.MediaRecorder) { 
+        setAR(true);
+        resolve(file); 
+        return; 
+      }
       
-      // Προσθήκη VP9 ως πρώτη επιλογή για καλύτερη συμπίεση
       var mime = [
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
@@ -772,7 +783,11 @@
         'video/webm'
       ].filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
       
-      if (!mime) { reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); return; }
+      if (!mime) { 
+        setAR(true);
+        reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); 
+        return; 
+      }
 
       var blurRanges = ranges.filter(function (r) { return r.blur; });
       var muteRanges = ranges.filter(function (r) { return r.mute; });
@@ -803,16 +818,24 @@
 
       var rec;
       try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); }
-      catch (e) { reject(new Error('MediaRecorder: ' + e.message)); return; }
+      catch (e) { 
+        setAR(true);
+        reject(new Error('MediaRecorder: ' + e.message)); 
+        return; 
+      }
 
       var chunks = [], running = true, finished = false, lastUI = 0;
       rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      
       rec.onstop = function () {
         if (finished) return; finished = true;
         running = false;
         try { video.pause(); } catch (e) {}
         video.onended = null;
         if (g) { g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
+        
+        // Ξαναδίνουμε ζωή στην AR σκηνή τώρα που τελειώσαμε
+        setAR(true);
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
 
@@ -890,6 +913,7 @@
         })();
       }).catch(function (err) {
         running = false;
+        setAR(true); // Επαναφορά σε περίπτωση σφάλματος
         reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + (err && err.message ? err.message : err)));
       });
     });
