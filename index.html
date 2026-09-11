@@ -99,6 +99,7 @@
   #mediaList { margin-bottom: 15px; }
   .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
   .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+  .edit-media-btn { background: var(--sea); color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 5px; }
 
   /* Editor Canvas & Box */
   .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; touch-action: none; }
@@ -128,7 +129,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>3Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -561,15 +562,12 @@
   $('addBtn').onclick = () => { if(me) { $('uploadSheet').classList.add('on'); setAR(false); } };
   $('triggerFileBtn').onclick = () => $('singleFileInput').click();
 
-  $('singleFileInput').onchange = function(e) {
-    if(this.files.length === 0) return;
-    currentFile = this.files[0];
-    this.value = '';
-
+  function loadFileIntoEditor(file) {
+    currentFile = file;
     setAR(false);
     $('uploadSheet').classList.remove('on');
     $('editorSheet').classList.add('on');
-    $('editorFilename').textContent = currentFile.name;
+    $('editorFilename').textContent = file.name;
 
     $('imageEditor').style.display = 'none';
     $('videoEditor').style.display = 'none';
@@ -578,9 +576,9 @@
     $('videoRangeList').innerHTML = '';
 
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
-    currentObjectURL = URL.createObjectURL(currentFile);
+    currentObjectURL = URL.createObjectURL(file);
 
-    if(currentFile.type.startsWith('image/')) {
+    if(file.type.startsWith('image/')) {
       $('imageEditor').style.display = 'block';
       imageHistory = [];
       imgObj = new Image();
@@ -598,24 +596,29 @@
       };
       imgObj.src = currentObjectURL;
     }
-    else if(currentFile.type.startsWith('video/')) {
+    else if(file.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block';
       var vid = $('videoPreview'); 
-      
-      $('vTimeNow').textContent = 'Φόρτωση βίντεο στη μνήμη...';
+      $('vTimeNow').textContent = 'Φόρτωση βίντεο...';
       vid.src = currentObjectURL;
-      vid.load(); // Αναγκαστική φόρτωση metadata για κινητά
-      
+      vid.load();
       vid.onloadedmetadata = function() {
         $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
       };
-      
       addVideoRangeRow();
     }
-    else if(currentFile.type.startsWith('audio/')) {
+    else if(file.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block';
-      $('audioPreview').src = currentObjectURL; window.addAudioMuteRow();
+      $('audioPreview').src = currentObjectURL; 
+      window.addAudioMuteRow();
     }
+  }
+
+  $('singleFileInput').onchange = function(e) {
+    if(this.files.length === 0) return;
+    var f = this.files[0];
+    this.value = '';
+    loadFileIntoEditor(f);
   };
 
   function getMousePos(e) {
@@ -694,10 +697,22 @@
     var html = '';
     processedFiles.forEach((f, i) => {
       var kb = f.blob ? Math.round(f.blob.size/1024) : 0;
-      html += `<div class="media-list-item"><span>${i+1}. ${f.name} <small style="color:#666">(${kb} KB)</small></span><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div>`;
+      html += `<div class="media-list-item"><span>${i+1}. ${f.name} <small style="color:#666">(${kb} KB)</small></span><div><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div></div>`;
     });
     list.innerHTML = html;
   }
+
+  // --- ΕΠΑΝΑΛΗΠΤΙΚΗ ΕΠΕΞΕΡΓΑΣΙΑ ΑΠΟ ΤΗΝ ΠΡΟΒΟΛΗ ---
+  window.editSavedMedia = function(index) {
+    var f = processedFiles[index];
+    if (!f) return;
+    // Κλείνουμε το sheet προβολής και φορτώνουμε το blob πίσω στον editor
+    $('previewSheet').classList.remove('on');
+    var fileObj = new File([f.blob], f.name, { type: f.type });
+    loadFileIntoEditor(fileObj);
+    // Το αφαιρούμε προσωρινά από τη λίστα ώστε αν το ξανασωθεί να ανανεωθεί
+    processedFiles.splice(index, 1);
+  };
 
   $('finishStoryBtn').onclick = function() {
     var title = $('storyTitle').value;
@@ -718,12 +733,16 @@
       previewURLs.push(blobUrl);
 
       if (f.type.startsWith('image/')) {
-        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px;">`;
+        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">`;
       } else if (f.type.startsWith('video/')) {
-        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px;"></video>`;
+        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>`;
       } else if (f.type.startsWith('audio/')) {
-        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%;"></audio>`;
+        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
       }
+      
+      // Κουμπί για ξανά επεξεργασία αυτού του αρχείου
+      itemBox.innerHTML += `<button class="edit-media-btn" onclick="editSavedMedia(${i})" style="width:100%; padding:8px; margin-top:5px; background:var(--sea); color:white; border-radius:4px; font-weight:bold;">✏️ Ξανά-επεξεργασία αυτού του αρχείου</button>`;
+      
       container.appendChild(itemBox);
     });
 
@@ -731,9 +750,6 @@
 
     $('previewSheet').classList.add('on');
     setAR(false);
-    $('storyTitle').value = '';
-    processedFiles = [];
-    updateMediaListUI();
   };
 
   function fixDuration(v) {
@@ -764,7 +780,6 @@
   // --- Επεξεργαστής Βίντεο ---
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
-      
       setAR(false);
 
       var video = $('videoPreview');
@@ -943,7 +958,7 @@
           });
 
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
-          var src = oCtx.createBufferSource(); src.buffer = aBuf;
+            var src = oCtx.createBufferSource(); src.buffer = aBuf;
           var gain = oCtx.createGain(); gain.gain.setValueAtTime(1, 0);
           mRanges.forEach(function(r){ gain.gain.setValueAtTime(1, Math.max(0, r.s-0.01)); gain.gain.setValueAtTime(0, r.s); gain.gain.setValueAtTime(0, r.e); gain.gain.setValueAtTime(1, r.e+0.01); });
           src.connect(gain); gain.connect(oCtx.destination); src.start(0);
