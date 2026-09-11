@@ -72,13 +72,13 @@
   .me-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; background: var(--chalk); border: 3px solid var(--ink); }
   .poi-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--bone); border: 3px solid var(--chalk); }
 
-  /* Info Sheet (Για τα υπαρχοντα points) */
+  /* Info Sheet */
   #infoSheet { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.55); pointer-events: auto; }
   #infoSheet.on { display: flex; }
   .sheet-inner { background: var(--bone); color: var(--ink); padding: 26px var(--pad) calc(26px + env(safe-area-inset-bottom)); max-height: 85%; overflow-y: auto; border-radius: 16px 16px 0 0; }
   #closeInfoBtn { padding: 14px 22px; background: var(--ink); color: var(--bone); font-size: 16px; margin-top: 10px;}
 
-  /* --- ΝΕΟ: Εργαλεία Upload & Edit --- */
+  /* --- Εργαλεία Upload & Edit --- */
   #addBtn { position: fixed; bottom: calc(var(--handle) + var(--pad) + 70px); right: var(--pad); z-index: 25; width: 56px; height: 56px; border-radius: 50%; background: var(--chalk); color: var(--ink); font-size: 32px; font-weight: 300; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: auto; }
   #addBtn.on { display: flex; }
   body.drawer-open #addBtn { bottom: calc(52% + var(--pad)); }
@@ -174,6 +174,8 @@
     <div id="imageEditor" class="editor-box">
       <canvas id="imageCanvas"></canvas>
       <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; font-size:12px; border-radius:4px; pointer-events:none;">Σύρε το δάχτυλο για θόλωμα</div>
+      <!-- ΚΟΥΜΠΙ UNDO -->
+      <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
     <!-- Editor Βίντεο (Redact Box) -->
@@ -212,7 +214,7 @@
   var $ = function(id) { return document.getElementById(id); };
 
   // ==========================================
-  // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ (ΤΟ ΑΡΧΙΚΟ ΣΟΥ)
+  // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
   // ==========================================
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης.' },
@@ -411,6 +413,8 @@
   // ==========================================
   var filesQueue = [], processedFiles = [], currentIndex = 0, currentObjectURL = null;
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d'), imgObj = null, isDrawing = false;
+  var imageHistory = []; // ΝΕΟ: Για το Undo της εικόνας
+  
   var vContainer = $('videoContainer'), redactBox = $('redactBox'), isDraggingBox = false, boxRect = {x:0,y:0,w:0,h:0}, startDrag = {x:0,y:0};
 
   window.addMuteRow = function() {
@@ -444,7 +448,9 @@
     currentObjectURL = URL.createObjectURL(file);
     
     if(file.type.startsWith('image/')) {
-      $('imageEditor').style.display = 'block'; imgObj = new Image();
+      $('imageEditor').style.display = 'block'; 
+      imageHistory = []; // Καθαρισμός ιστορικού (Undo)
+      imgObj = new Image();
       imgObj.onload = () => { canvas.width = imgObj.width; canvas.height = imgObj.height; ctx.drawImage(imgObj, 0, 0); };
       imgObj.src = currentObjectURL;
     } 
@@ -456,18 +462,43 @@
     }
   }
 
-  // Blur Εικόνας
+  // --- Blur Εικόνας & Undo Logic ---
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
     return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
   }
-  function drawBlur(pos) { ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); ctx.filter = 'blur(15px)'; ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height); ctx.restore(); }
-  canvas.onpointerdown = e => { isDrawing = true; drawBlur(getMousePos(e)); canvas.setPointerCapture(e.pointerId); };
+  
+  function drawBlur(pos) { 
+    ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); 
+    ctx.filter = 'blur(15px)'; ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height); ctx.restore(); 
+  }
+  
+  canvas.onpointerdown = e => { 
+    isDrawing = true; 
+    // ΝΕΟ: Αποθήκευση της κατάστασης ΠΡΙΝ ζωγραφίσει οτιδήποτε (για το Undo)
+    imageHistory.push(canvas.toDataURL());
+    drawBlur(getMousePos(e)); 
+    canvas.setPointerCapture(e.pointerId); 
+  };
+  
   canvas.onpointermove = e => { if(isDrawing) drawBlur(getMousePos(e)); };
   canvas.onpointerup = () => isDrawing = false;
+  
+  // ΝΕΟ: Undo Event Listener
+  $('undoBlurBtn').onclick = () => {
+    if (imageHistory.length > 0) {
+      var lastState = imageHistory.pop(); // Παίρνουμε την τελευταία αποθηκευμένη εικόνα
+      var tempImg = new Image();
+      tempImg.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(tempImg, 0, 0); // Την ξαναζωγραφίζουμε στον καμβά
+      };
+      tempImg.src = lastState;
+    }
+  };
 
-  // Redact Box Βίντεο
+  // --- Redact Box Βίντεο ---
   vContainer.onpointerdown = e => {
     isDraggingBox = true; var rect = vContainer.getBoundingClientRect(); startDrag = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     boxRect = {x: startDrag.x, y: startDrag.y, w: 0, h: 0};
@@ -574,7 +605,7 @@
 
   function finishProcess() {
     $('editorSheet').classList.remove('on');
-    var msg = `Ιστορία: "${$('storyTitle').value}"\nΤοποθεσία: ${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}\n\nΑρχεία έτοιμα για Upload:\n`;
+    var msg = `Ιστορία: "${$('storyTitle').value}"\nΤοποθεσία: ${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}\n\nΑρχεία (Επεξεργασμένα & Τοπικά):\n`;
     processedFiles.forEach((f, i) => msg += `${i+1}. ${f.name} (${f.type})\n`);
     alert(msg);
     $('storyTitle').value = ''; $('mediaFiles').value = '';
