@@ -33,7 +33,6 @@
 
   /* AR Scene - Πίσω από όλα */
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
-  /* Όταν δουλεύουμε σε αρχείο, κρύβουμε τελείως την AR σκηνή (γλιτώνουμε GPU) */
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
 
   /* Βασικό UI AR */
@@ -129,7 +128,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>1Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -230,7 +229,7 @@
   </div>
 </div>
 
-<!-- Overlay επεξεργασίας (έξω από τα sheets, για να μη σέρνεται το layout) -->
+<!-- Overlay επεξεργασίας -->
 <div id="processingOverlay">
   <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία...</h3>
   <p id="procMsg" style="font-size:14px; margin:0;">Προετοιμασία…</p>
@@ -268,7 +267,6 @@
   var me = null, map = null, meMarker = null, accCircle = null, followMe = true;
   window.currentHeading = null;
 
-  // --- Παύση της AR σκηνής όσο δουλεύουμε με αρχεία (κρίσιμο για ταχύτητα) ---
   var arPaused = false;
   function setAR(active) {
     var sc = document.querySelector('a-scene');
@@ -458,11 +456,11 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (BLUR VIDEO & MUTE AUDIO)
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Βελτιστοποιημένος)
   // ==========================================
-  var MAX_IMAGE_W = 1600;   // μέγιστο πλάτος εικόνας που επεξεργαζόμαστε
-  var MAX_VIDEO_W = 960;    // μέγιστο πλάτος εξόδου βίντεο
-  var VIDEO_BITRATE = 2500000;
+  var MAX_IMAGE_W = 1600;  
+  var MAX_VIDEO_W = 640;     
+  var VIDEO_BITRATE = 1000000; 
 
   var processedFiles = [];
   var currentFile = null;
@@ -471,13 +469,12 @@
 
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d', { alpha: false });
   var imgObj = null, isDrawing = false;
-  var blurSrc = document.createElement('canvas');   // προ-θολωμένη εκδοχή της εικόνας
+  var blurSrc = document.createElement('canvas');  
   var imageHistory = [];
   var MAX_HISTORY = 15;
 
   var vContainer = $('videoContainer');
 
-  // Ένα μόνο AudioContext + ένα μόνο MediaElementSource για όλη τη ζωή της σελίδας
   var _actx = null, _vSrc = null, _vGain = null, _vDest = null;
   function videoAudioGraph() {
     var video = $('videoPreview');
@@ -526,7 +523,6 @@
 
   $('addRangeBtn').onclick = function () { addVideoRangeRow(); };
 
-  // Ένας listener για όλες τις σειρές
   $('videoRangeList').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
     if (b.classList.contains('delrow')) { b.closest('.range-item').remove(); return; }
@@ -540,7 +536,6 @@
     $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's';
   });
 
-  // Διαβάζει τα διαστήματα από το UI
   function readVideoRanges() {
     var out = [];
     document.querySelectorAll('#videoRangeList .range-item').forEach(function (row) {
@@ -590,13 +585,11 @@
       imageHistory = [];
       imgObj = new Image();
       imgObj.onload = () => {
-        // Υποβιβασμός μεγάλων φωτογραφιών: αλλιώς κάθε πινελιά blur κοστίζει τεράστια
         var k = Math.min(1, MAX_IMAGE_W / imgObj.width);
         canvas.width = Math.round(imgObj.width * k);
         canvas.height = Math.round(imgObj.height * k);
         ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
 
-        // Φτιάχνουμε ΜΙΑ φορά τη θολωμένη εκδοχή. Μετά απλώς την "ξύνουμε" πάνω στον καμβά.
         blurSrc.width = canvas.width; blurSrc.height = canvas.height;
         var bctx = blurSrc.getContext('2d');
         bctx.filter = 'blur(14px)';
@@ -617,7 +610,6 @@
     }
   };
 
-  // Blur Εικόνας & Undo (χωρίς filter σε κάθε κίνηση δαχτύλου)
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -727,7 +719,6 @@
       container.appendChild(itemBox);
     });
 
-    // Τα webm του MediaRecorder δεν έχουν duration -> χαλάει η μπάρα/το seek
     container.querySelectorAll('video').forEach(fixDuration);
 
     $('previewSheet').classList.add('on');
@@ -737,7 +728,6 @@
     updateMediaListUI();
   };
 
-  // Διόρθωση duration σε webm χωρίς metadata (αλλιώς το playback δείχνει "κολλημένο")
   function fixDuration(v) {
     v.addEventListener('loadedmetadata', function once() {
       if (v.duration !== Infinity) return;
@@ -763,22 +753,41 @@
     setAR(true);
   };
 
-  // --- Επεξεργαστής Βίντεο ---
-  // Διαστήματα χρόνου: σίγαση ήχου, θόλωμα ολόκληρης της εικόνας, ή και τα δύο.
-  // Το θόλωμα γίνεται με downscale/upscale, όχι με ctx.filter, ώστε να μην πέφτουν frames.
+  // --- Επεξεργαστής Βίντεο (Με παύση AR για αποφυγή κολλημάτων) ---
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
+      
+      // Κόβουμε εντελώς την κάμερα και την AR σκηνή για να ελευθερωθεί η GPU!
+      setAR(false);
+
       var video = $('videoPreview');
       var ranges = readVideoRanges();
 
-      // Τίποτα να αλλάξει; Κρατάμε το πρωτότυπο, μηδέν χρόνος.
-      if (ranges.length === 0) { resolve(file); return; }
+      if (ranges.length === 0) { 
+        setAR(true); 
+        resolve(file); 
+        return; 
+      }
 
-      if (!window.MediaRecorder) { resolve(file); return; }
-      var mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4',
-                  'video/webm;codecs=vp8,opus', 'video/webm']
-        .filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
-      if (!mime) { reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); return; }
+      if (!window.MediaRecorder) { 
+        setAR(true);
+        resolve(file); 
+        return; 
+      }
+      
+      var mime = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 
+        'video/mp4',
+        'video/webm'
+      ].filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
+      
+      if (!mime) { 
+        setAR(true);
+        reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); 
+        return; 
+      }
 
       var blurRanges = ranges.filter(function (r) { return r.blur; });
       var muteRanges = ranges.filter(function (r) { return r.mute; });
@@ -793,7 +802,6 @@
       var oCtx = oCanvas.getContext('2d', { alpha: false });
       oCtx.imageSmoothingEnabled = true;
 
-      // Μικροσκοπικός καμβάς: το downscale εδώ και το upscale πίσω δίνει βαρύ θόλωμα σχεδόν δωρεάν
       var scratch = document.createElement('canvas');
       var tw = 24, th = Math.max(1, Math.round(tw * vh / vw));
       scratch.width = tw; scratch.height = th;
@@ -810,16 +818,24 @@
 
       var rec;
       try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); }
-      catch (e) { reject(new Error('MediaRecorder: ' + e.message)); return; }
+      catch (e) { 
+        setAR(true);
+        reject(new Error('MediaRecorder: ' + e.message)); 
+        return; 
+      }
 
       var chunks = [], running = true, finished = false, lastUI = 0;
       rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      
       rec.onstop = function () {
         if (finished) return; finished = true;
         running = false;
         try { video.pause(); } catch (e) {}
         video.onended = null;
         if (g) { g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
+        
+        // Ξαναδίνουμε ζωή στην AR σκηνή τώρα που τελειώσαμε
+        setAR(true);
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
 
@@ -845,7 +861,7 @@
         if (!running) return;
         drawFrame();
         var now = performance.now();
-        if (now - lastUI > 250) {   // το UI δεν ενημερώνεται σε κάθε frame, κοστίζει
+        if (now - lastUI > 250) {  
           lastUI = now;
           if (video.duration && isFinite(video.duration)) {
             showProgress(true, 'Εγγραφή: ' + Math.round(video.currentTime) + 's / ' + Math.round(video.duration) + 's',
@@ -857,8 +873,6 @@
 
       function stopAll() { if (rec.state !== 'inactive') rec.stop(); }
 
-      // --- Προθέρμανση: γεμίζουμε τον καμβά και αφήνουμε τον decoder να πιάσει ρυθμό
-      // ΠΡΙΝ ξεκινήσει ο recorder. Αλλιώς τα πρώτα δευτερόλεπτα βγαίνουν "καρέ-καρέ".
       function seekToStart() {
         return new Promise(function (res) {
           var done = false, go = function () { if (!done) { done = true; res(); } };
@@ -872,7 +886,7 @@
       showProgress(true, 'Προθέρμανση…', 0);
 
       seekToStart().then(function () {
-        drawFrame();                       // ο καμβάς δεν είναι ποτέ άδειος στο πρώτο frame
+        drawFrame();                            
         return Promise.resolve(video.play());
       }).then(function () {
         if (g && g.ctx.state === 'suspended') return g.ctx.resume();
@@ -882,9 +896,8 @@
           drawFrame();
           if (++primed < 4) { nextFrame(prime); return; }
 
-          // Χρονισμός ήχου: το gain δουλεύει σε χρόνο AudioContext, όχι βίντεο.
           if (g && muteRanges.length) {
-            var t0 = g.ctx.currentTime - video.currentTime;   // πότε ήταν το 0:00 του βίντεο
+            var t0 = g.ctx.currentTime - video.currentTime;   
             var gv = g.gain.gain;
             gv.cancelScheduledValues(0);
             gv.setValueAtTime(1, g.ctx.currentTime);
@@ -900,6 +913,7 @@
         })();
       }).catch(function (err) {
         running = false;
+        setAR(true); // Επαναφορά σε περίπτωση σφάλματος
         reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + (err && err.message ? err.message : err)));
       });
     });
