@@ -135,7 +135,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>12Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -310,7 +310,7 @@
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
 
-      // Αυτόματος έλεγχος αν είναι iOS για διορθωμένη πυξίδα (αν χρειάζεται ανάποδα)
+      // Έλεγχος iOS για διόρθωση πυξίδας 180 μοιρών
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS) {
         h = (h + 180) % 360;
