@@ -31,10 +31,8 @@
   button { font: inherit; cursor: pointer; border: 0; border-radius: 2px; }
   img.labelsrc { display: none; }
   
-  /* AR Scene - Πίσω από όλα */
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
 
-  /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
   #gate h1 { font-size: 30px; margin: 0 0 12px; }
   #gate .rule { height: 2px; width: 44px; background: var(--chalk); margin: 0 0 22px; }
@@ -43,7 +41,6 @@
   #hud.on { display: block; }
   #status { position: absolute; top: calc(var(--pad) + env(safe-area-inset-top)); left: var(--pad); right: var(--pad); padding: 9px 13px; background: rgba(14,42,46,.92); font-size: 14px; }
   
-  /* Χάρτης & Compass */
   #drawer { position: fixed; left: 0; right: 0; bottom: 0; height: 52%; z-index: 15; display: flex; flex-direction: column; transform: translateY(calc(100% - var(--handle))); transition: transform .28s cubic-bezier(.32,.72,0,1); }
   #drawer.open { transform: translateY(0); }
   #handle { flex: none; height: var(--handle); width: 100%; display: flex; align-items: center; gap: 11px; padding: 0 var(--pad); background: var(--ink); color: var(--bone); border-top: 3px solid var(--chalk); touch-action: none; pointer-events: auto; }
@@ -57,14 +54,12 @@
   #compass .needle::before { content: ''; position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 19px solid var(--chalk); }
   #compass .needle::after { content: ''; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 19px solid rgba(242,237,228,.28); }
   
-  /* Πλησιέστερο Σημείο */
   #nearest { position: absolute; left: var(--pad); right: var(--pad); bottom: calc(var(--handle) + var(--pad)); transition: bottom .28s; pointer-events: auto; display: none; width: calc(100% - var(--pad)*2); text-align: left; padding: 15px 17px; background: var(--bone); color: var(--ink); border-left: 5px solid var(--chalk); }
   #nearest.on { display: block; }
   body.drawer-open #nearest { bottom: calc(52% + var(--pad)); }
   #nearest .dist { display: block; font-size: 14px; color: var(--sea); margin-bottom: 2px; }
   #nearest .name { display: block; font-size: 19px; font-weight: 600; }
 
-  /* Markers */
   .me-wrap { position: relative; width: 56px; height: 56px; }
   .me-rot  { position: absolute; inset: 0; transform-origin: 50% 50%; }
   .me-cone { position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 17px solid transparent; border-right: 17px solid transparent; border-top: 30px solid rgba(240, 194, 68, 0.88); }
@@ -72,13 +67,11 @@
   .me-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; background: var(--chalk); border: 3px solid var(--ink); }
   .poi-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--bone); border: 3px solid var(--chalk); }
 
-  /* Info Sheet */
   #infoSheet { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.55); pointer-events: auto; }
   #infoSheet.on { display: flex; }
   .sheet-inner { background: var(--bone); color: var(--ink); padding: 26px var(--pad) calc(26px + env(safe-area-inset-bottom)); max-height: 95%; overflow-y: auto; border-radius: 16px 16px 0 0; }
   #closeInfoBtn { padding: 14px 22px; background: var(--ink); color: var(--bone); font-size: 16px; margin-top: 10px;}
 
-  /* --- Εργαλεία Upload & Edit --- */
   #addBtn { position: fixed; bottom: calc(var(--handle) + var(--pad) + 70px); right: var(--pad); z-index: 25; width: 56px; height: 56px; border-radius: 50%; background: var(--chalk); color: var(--ink); font-size: 32px; font-weight: 300; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: auto; }
   #addBtn.on { display: flex; }
   body.drawer-open #addBtn { bottom: calc(52% + var(--pad)); }
@@ -99,12 +92,10 @@
   .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
   .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
 
-  /* Editor Canvas & Box */
-  .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; touch-action: none; }
+  .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; }
   #imageCanvas { width: 100%; display: block; }
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
-  #redactBox { position: absolute; border: 3px dashed var(--chalk); background: rgba(240,194,68,0.2); display: none; cursor: move; }
   
   .mute-list { background: #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; color: #333; }
   .mute-item { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
@@ -115,7 +106,6 @@
 </head>
 <body>
 
-<!-- Εκκίνηση -->
 <div id="gate">
   <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
@@ -123,22 +113,18 @@
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
 </div>
 
-<!-- AR HUD & Κουμπιά -->
 <div id="hud">
   <div id="status">Αναμονή για στίγμα…</div>
   <button id="nearest"><span class="dist"></span><span class="name"></span></button>
 </div>
 
-<!-- Κουμπί Νέας Ιστορίας -->
 <button id="addBtn" aria-label="Προσθήκη">+</button>
 
-<!-- Drawer Χάρτη -->
 <div id="drawer">
   <button id="handle"><span class="grip"></span><span class="lbl">Χάρτης</span></button>
   <div id="map"><div id="compass"><span class="needle"></span><span class="deg">—</span></div></div>
 </div>
 
-<!-- Προβολή Υπάρχουσας Ιστορίας -->
 <div id="infoSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2 id="sheetTitle"></h2>
@@ -148,7 +134,6 @@
   </div>
 </div>
 
-<!-- 1. Κεντρικό Μενού Upload -->
 <div id="uploadSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Νέα Ιστορία</h2>
@@ -177,33 +162,27 @@
   </div>
 </div>
 
-<!-- 2. Editor Αρχείου -->
 <div id="editorSheet" class="edit-sheet">
   <div class="sheet-inner" style="position: relative;">
     <h2 id="editorTitle">Επεξεργασία Αρχείου</h2>
     <p id="editorFilename" style="font-size:13px; color:var(--sea); margin-top:-10px; margin-bottom:15px;">αρχείο.jpg</p>
     
-    <!-- Editor Εικόνας (Blur) -->
     <div id="imageEditor" class="editor-box">
       <canvas id="imageCanvas"></canvas>
       <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; font-size:12px; border-radius:4px; pointer-events:none;">Σύρε το δάχτυλο για θόλωμα</div>
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
-    <!-- Editor Βίντεο (Blur Area & Mute Points) -->
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
-        <video id="videoPreview" controls playsinline></video>
-        <div id="redactBox"></div>
+        <video id="videoPreview" controls playsinline style="width:100%; display:block;"></video>
       </div>
-      <p style="font-size:12px; color:var(--sea); margin:8px 0;">*Σύρε το πλαίσιο στο βίντεο για να επιλέξεις περιοχή θολώματος (Blur).</p>
       
-      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Σημεία Σίγασης Ήχου στο Βίντεο (Mute):</label>
-      <div id="videoMuteList" class="mute-list"></div>
-      <button onclick="addVideoMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Σημείου Mute</button>
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Διαστήματα Ολικού Blur & Mute (Tαυτόχρονα):</label>
+      <div id="videoBlurMuteList" class="mute-list"></div>
+      <button onclick="addVideoBlurMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Διαστήματος (Blur & Mute)</button>
     </div>
 
-    <!-- Editor Ήχου (Mute) -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
       <audio id="audioPreview" controls style="width:100%; margin-bottom:10px;"></audio>
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Mute):</label>
@@ -218,12 +197,12 @@
     
     <div id="processingOverlay">
       <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία...</h3>
-      <p style="font-size:14px; margin:0;">Το αρχείο καταγράφεται τοπικά με θόλωμα και mute. Παρακαλώ περιμένετε.</p>
+      <p style="font-size:14px; margin:0; margin-bottom:15px;">Το αρχείο καταγράφεται τοπικά. Παρακαλώ περιμένετε.</p>
+      <button type="button" id="cancelProcessBtn" style="padding:10px 20px; background:#d9534f; color:#fff; font-weight:bold; border-radius:4px;">Ακύρωση Διαδικασίας</button>
     </div>
   </div>
 </div>
 
-<!-- 3. Μενού Τοπικής Προβολής Αρχείων -->
 <div id="previewSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Τα Αρχεία σου (Τοπική Προβολή)</h2>
@@ -240,9 +219,6 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
-  // ==========================================
-  // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
-  // ==========================================
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης.' },
     { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
@@ -434,16 +410,15 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (BLUR VIDEO & MUTE AUDIO)
+  // 2. ΕΠΕΞΕΡΓΑΣΤΗΣ (ΟΛΙΚΟ BLUR & MUTE ΔΙΑΣΤΗΜΑΤΑ)
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
   var currentObjectURL = null;
+  var activeRecorder = null; 
 
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d'), imgObj = null, isDrawing = false;
   var imageHistory = []; 
-  
-  var vContainer = $('videoContainer'), redactBox = $('redactBox'), isDraggingBox = false, boxRect = {x:0,y:0,w:0,h:0}, startDrag = {x:0,y:0};
 
   window.addAudioMuteRow = function() {
     var div = document.createElement('div'); div.className = 'mute-item';
@@ -453,12 +428,12 @@
     $('audioMuteList').appendChild(div);
   };
 
-  window.addVideoMuteRow = function() {
+  window.addVideoBlurMuteRow = function() {
     var div = document.createElement('div'); div.className = 'mute-item';
-    div.innerHTML = `Από: <input type="number" step="1" min="0" class="vmute-start">s 
-                     Έως: <input type="number" step="1" min="0" class="vmute-end">s 
+    div.innerHTML = `Από: <input type="number" step="1" min="0" class="vbm-start">s 
+                     Έως: <input type="number" step="1" min="0" class="vbm-end">s 
                      <button onclick="this.parentElement.remove()" style="color:red; background:none; font-weight:bold;">X</button>`;
-    $('videoMuteList').appendChild(div);
+    $('videoBlurMuteList').appendChild(div);
   };
 
   window.cancelStory = function() {
@@ -483,9 +458,8 @@
     $('imageEditor').style.display = 'none'; 
     $('videoEditor').style.display = 'none'; 
     $('audioEditor').style.display = 'none';
-    redactBox.style.display = 'none'; 
     $('audioMuteList').innerHTML = '';
-    $('videoMuteList').innerHTML = '';
+    $('videoBlurMuteList').innerHTML = '';
     
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(currentFile);
@@ -499,8 +473,8 @@
     } 
     else if(currentFile.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block'; 
-      var vid = $('videoPreview'); vid.src = currentObjectURL; boxRect = {x:0,y:0,w:0,h:0};
-      window.addVideoMuteRow();
+      var vid = $('videoPreview'); vid.src = currentObjectURL;
+      window.addVideoBlurMuteRow();
     }
     else if(currentFile.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block'; 
@@ -512,7 +486,7 @@
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
+    return { x: (cX - rect.left)*scaleX, y: (clientY - rect.top)*scaleY };
   }
   function drawBlur(pos) { 
     ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); 
@@ -536,21 +510,6 @@
     }
   };
 
-  // Redact Box Βίντεο (Για την περιοχή θολώματος)
-  vContainer.onpointerdown = e => {
-    isDraggingBox = true; var rect = vContainer.getBoundingClientRect(); startDrag = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    boxRect = {x: startDrag.x, y: startDrag.y, w: 0, h: 0};
-    redactBox.style.display = 'block'; redactBox.style.left = boxRect.x+'px'; redactBox.style.top = boxRect.y+'px';
-    vContainer.setPointerCapture(e.pointerId);
-  };
-  vContainer.onpointermove = e => {
-    if(!isDraggingBox) return; var rect = vContainer.getBoundingClientRect();
-    var curX = Math.max(0, Math.min(e.clientX - rect.left, rect.width)), curY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-    boxRect.x = Math.min(startDrag.x, curX); boxRect.y = Math.min(startDrag.y, curY); boxRect.w = Math.abs(curX - startDrag.x); boxRect.h = Math.abs(curY - startDrag.y);
-    redactBox.style.left = boxRect.x+'px'; redactBox.style.top = boxRect.y+'px'; redactBox.style.width = boxRect.w+'px'; redactBox.style.height = boxRect.h+'px';
-  };
-  vContainer.onpointerup = () => isDraggingBox = false;
-
   $('cancelSingleBtn').onclick = () => {
     currentFile = null;
     $('editorSheet').classList.remove('on');
@@ -565,7 +524,8 @@
         processedFiles.push({ name: currentFile.name, type: 'image/jpeg', dataURL: canvas.toDataURL('image/jpeg', 0.8) });
       } 
       else if (currentFile.type.startsWith('video/')) {
-        processedFiles.push({ name: currentFile.name, type: 'video/webm', blob: await processVideoLocal(currentFile) });
+        var resBlob = await processVideoLocal(currentFile);
+        if (resBlob) processedFiles.push({ name: currentFile.name, type: 'video/webm', blob: resBlob });
       }
       else if (currentFile.type.startsWith('audio/')) {
         processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: await processAudioLocal(currentFile) });
@@ -574,9 +534,20 @@
     } catch (e) { alert("Σφάλμα: " + e.message); }
     
     $('processingOverlay').style.display = 'none'; 
-    $('editorSheet').classList.remove('on');
-    $('uploadSheet').classList.add('on');
-    currentFile = null;
+    if (currentFile) {
+      $('editorSheet').classList.remove('on');
+      $('uploadSheet').classList.add('on');
+      currentFile = null;
+    }
+  };
+
+  $('cancelProcessBtn').onclick = function() {
+    if (activeRecorder && activeRecorder.state === 'recording') {
+      activeRecorder.stop();
+    }
+    var video = $('videoPreview');
+    video.pause();
+    $('processingOverlay').style.display = 'none';
   };
 
   window.removeMedia = function(index) {
@@ -628,7 +599,6 @@
     updateMediaListUI();
   };
 
-  // Διόρθωση κλεισίματος προεπισκόπησης (Memory Cleanup)
   $('closePreviewBtn').onclick = function() {
     var container = $('localPreviewContainer');
     container.querySelectorAll('video, audio').forEach(media => {
@@ -639,38 +609,32 @@
     $('previewSheet').classList.remove('on');
   };
 
-  // --- Επεξεργαστής Βίντεο: BLUR αντί για μαύρο + Mute σημεία ---
+  // --- Επεξεργαστής Βίντεο: Ολικό Blur & Mute σε επιλεγμένα χρονικά διαστήματα ---
   function processVideoLocal(file) {
     return new Promise((resolve) => {
       var video = $('videoPreview'), oCanvas = document.createElement('canvas'), oCtx = oCanvas.getContext('2d');
-      var blurCanvas = document.createElement('canvas'), blurCtx = blurCanvas.getContext('2d');
-      
-      var vRect = video.getBoundingClientRect();
-      var pX = boxRect.w===0 ? 0 : boxRect.x/vRect.width, pY = boxRect.w===0 ? 0 : boxRect.y/vRect.height;
-      var pW = boxRect.w===0 ? 0 : boxRect.w/vRect.width, pH = boxRect.w===0 ? 0 : boxRect.h/vRect.height;
-
       oCanvas.width = video.videoWidth; oCanvas.height = video.videoHeight;
-      blurCanvas.width = video.videoWidth; blurCanvas.height = video.videoHeight;
       
       var canvasStream = oCanvas.captureStream(30), finalStream = canvasStream;
       
-      var vmRanges = [];
-      document.querySelectorAll('.mute-item').forEach(el => {
-        var sInput = el.querySelector('.vmute-start');
-        var eInput = el.querySelector('.vmute-end');
+      var ranges = [];
+      document.querySelectorAll('.vbm-start').forEach((sInput, idx) => {
+        var eInput = document.querySelectorAll('.vbm-end')[idx];
         if(sInput && eInput) {
           var s = parseFloat(sInput.value), end = parseFloat(eInput.value);
-          if(!isNaN(s) && !isNaN(end) && end>s) vmRanges.push({s:s, e:end});
+          if(!isNaN(s) && !isNaN(end) && end>s) ranges.push({s:s, e:end});
         }
       });
 
+      var aCtx = null;
       try {
-        var aCtx = new (window.AudioContext || window.webkitAudioContext)();
+        aCtx = new (window.AudioContext || window.webkitAudioContext)();
         var src = aCtx.createMediaElementSource(video);
         var gainNode = aCtx.createGain();
         gainNode.gain.setValueAtTime(1, 0);
         
-        vmRanges.forEach(r => {
+        // Μηδενισμός έντασης στα καθορισμένα διαστήματα
+        ranges.forEach(r => {
           gainNode.gain.setValueAtTime(1, Math.max(0, r.s-0.01));
           gainNode.gain.setValueAtTime(0, r.s);
           gainNode.gain.setValueAtTime(0, r.e);
@@ -688,40 +652,47 @@
       } catch(e){}
 
       var rec = new MediaRecorder(finalStream, {mimeType: 'video/webm'}), chunks = [];
+      activeRecorder = rec;
+      
       rec.ondataavailable = e => chunks.push(e.data);
-      rec.onstop = () => { resolve(new Blob(chunks, {type: 'video/webm'})); video.pause(); };
+      rec.onstop = () => { 
+        video.pause();
+        if (chunks.length > 0) {
+          resolve(new Blob(chunks, {type: 'video/webm'}));
+        } else {
+          resolve(null); 
+        }
+      };
       
       function drawFrame() {
         if(video.paused || video.ended) return;
         
-        blurCtx.filter = 'blur(20px)';
-        blurCtx.drawImage(video, 0, 0, blurCanvas.width, blurCanvas.height);
+        var currentTime = video.currentTime;
+        // Ελέγχουμε αν το τρέχον δευτερόλεπτο εμπίπτει σε κάποιο από τα ranges για ολικό blur
+        var isBlurred = ranges.some(r => currentTime >= r.s && currentTime <= r.e);
         
-        oCtx.drawImage(video, 0, 0, oCanvas.width, oCanvas.height);
-        
-        if (pW > 0 && pH > 0) {
-          oCtx.save();
-          oCtx.beginPath();
-          oCtx.rect(pX*oCanvas.width, pY*oCanvas.height, pW*oCanvas.width, pH*oCanvas.height);
-          oCtx.clip();
-          oCtx.drawImage(blurCanvas, 0, 0);
-          oCtx.restore();
+        oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+        if (isBlurred) {
+          oCtx.filter = 'blur(20px)';
+        } else {
+          oCtx.filter = 'none';
         }
+        oCtx.drawImage(video, 0, 0, oCanvas.width, oCanvas.height);
 
         requestAnimationFrame(drawFrame);
       }
 
       video.currentTime = 0; 
       video.play().then(() => { 
-        if(window.AudioContext) aCtx.resume();
+        if(aCtx) aCtx.resume();
         rec.start(); 
         drawFrame(); 
       });
-      video.onended = () => rec.stop();
+      video.onended = () => { if(rec.state === 'recording') rec.stop(); };
     });
   }
 
-  // --- Επεξεργαστής Ήχου (Mute points) ---
+  // --- Επεξεργαστής Ήχου ---
   function processAudioLocal(file) {
     return new Promise((resolve) => {
       var reader = new FileReader();
