@@ -185,11 +185,7 @@
         <p style="font-size:13px; color:#666; margin:0;">Δεν έχεις προσθέσει αρχεία ακόμα.</p>
       </div>
       <input type="file" id="singleFileInput" accept="image/*,video/*,audio/*" style="display:none;">
-      
-      <div style="display:flex; gap:10px; margin-top:5px;">
-        <button class="btn-secondary" id="triggerFileBtn" style="flex:1; padding:12px; border: 2px dashed #999;">+ Προσθήκη Αρχείου</button>
-        <button class="btn-secondary" id="recordAudioBtn" style="flex:1; padding:12px; background:var(--sea); color:white; font-weight:600;">🎙️ Ηχογράφηση</button>
-      </div>
+      <button class="btn-secondary" id="triggerFileBtn" style="width:100%; padding:12px; margin-top:5px; border: 2px dashed #999;">+ Προσθήκη Αρχείου</button>
     </div>
 
     <div class="btn-row">
@@ -301,7 +297,7 @@
       if (!cam) return;
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
-      o.lookAt(_camPos.x, o.position.y, o.position.z);
+      o.lookAt(_camPos.x, o.position.y, _camPos.z);
     }
   });
 
@@ -327,18 +323,6 @@
         degOut.textContent = Math.round(h) + '°';
       }
       applyHeadingToDot();
-    }
-  });
-
-  // Ειδικό component για να διορθώσουμε τη φορά των 3D entities στο iOS
-  AFRAME.registerComponent('ios-ar-fix', {
-    tick: function() {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) {
-        this.el.object3D.rotation.y = THREE.MathUtils.degToRad(180);
-      }
     }
   });
 
@@ -385,7 +369,7 @@
       parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
-    parts.push(`<a-camera id="cam" ios-ar-fix gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
+    parts.push(`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
 
     var scene = document.createElement('a-scene');
     scene.setAttribute('hud-compass', ''); 
@@ -487,7 +471,7 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με iOS-safe Blur & Ηχογράφηση)
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με iOS-safe Blur)
   // ==========================================
   var MAX_IMAGE_W = 1600;  
   var MAX_VIDEO_W = 640;     
@@ -509,42 +493,6 @@
     if (msg != null) $('procMsg').textContent = msg;
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
-
-  // --- Ηχογράφηση Φωνής (Live Recording) ---
-  let mediaRecorder = null;
-  let audioChunks = [];
-
-  $('recordAudioBtn').onclick = async function() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
-      this.textContent = '🎙️ Ηχογράφηση';
-      this.style.background = 'var(--sea)';
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-
-      mediaRecorder.ondataavailable = event => {
-        if (event.data.size > 0) audioChunks.push(event.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const audioFile = new File([audioBlob], "ihografisi_" + Date.now() + ".wav", { type: 'audio/wav' });
-        stream.getTracks().forEach(track => track.stop());
-        loadFileIntoEditor(audioFile, null);
-      };
-
-      mediaRecorder.start();
-      this.textContent = '⏹️ Διακοπή & Φόρτωση';
-      this.style.background = '#d9534f';
-    } catch (err) {
-      alert("Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο: " + err.message);
-    }
-  };
 
   // --- Ενημέρωση Timeline Βίντεο ---
   function updateVideoTimeline() {
@@ -684,7 +632,7 @@
   $('addBtn').onclick = () => { if(me) { $('uploadSheet').classList.add('on'); setAR(false); } };
   $('triggerFileBtn').onclick = () => $('singleFileInput').click();
 
-  // Φόρτωση αρχείου στον editor με ασφαλή χρονοδιακόπτη (fallback) για Android βίντεο
+  // Φόρτωση αρχείου στον editor
   function loadFileIntoEditor(file, savedMeta) {
     currentFile = file;
     setAR(false);
@@ -717,6 +665,7 @@
         blurSrc.height = canvas.height;
         var bctx = blurSrc.getContext('2d');
         
+        // Σχεδίαση και iOS-safe blur
         bctx.drawImage(canvas, 0, 0);
         try {
           bctx.filter = 'blur(16px)';
@@ -734,11 +683,7 @@
       $('vTimeNow').textContent = 'Φόρτωση βίντεο...';
       vid.src = currentObjectURL;
       vid.load();
-
-      var loadedFired = false;
-      function handleLoaded() {
-        if (loadedFired) return;
-        loadedFired = true;
+      vid.onloadedmetadata = function() {
         $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
           savedMeta.ranges.forEach(r => addVideoRangeRow(r.s, r.e, r.mute, r.blur));
@@ -746,11 +691,7 @@
           addVideoRangeRow();
         }
         updateVideoTimeline();
-      }
-
-      vid.onloadedmetadata = handleLoaded;
-      // Fallback αν το Android αργήσει να διαβάσει τα metadata
-      setTimeout(handleLoaded, 1500);
+      };
     }
     else if(file.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block';
@@ -830,7 +771,7 @@
       }
       else if (currentFile.type.startsWith('video/')) {
         var vblob = await processVideoLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/mp4', blob: vblob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
       }
       else if (currentFile.type.startsWith('audio/')) {
         var ablob = await processAudioLocal(currentFile);
@@ -967,7 +908,7 @@
       
       if (!mime) { 
         setAR(true);
-        resolve(file);
+        reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); 
         return; 
       }
 
@@ -990,14 +931,19 @@
       var sctx = scratch.getContext('2d', { alpha: false });
       sctx.imageSmoothingEnabled = true;
 
-      var stream = oCanvas.captureStream(30);
+      var g = null;
+      try { g = videoAudioGraph(); g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
+      catch (e) { g = null; }
+
+      var vTracks = oCanvas.captureStream(30).getVideoTracks();
+      var aTracks = (g && g.dest.stream.getAudioTracks()) || [];
+      var stream = new MediaStream(vTracks.concat(aTracks));
 
       var rec;
-      try { 
-        rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); 
-      } catch (e) { 
+      try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); }
+      catch (e) { 
         setAR(true);
-        resolve(file);
+        reject(new Error('MediaRecorder: ' + e.message)); 
         return; 
       }
 
@@ -1009,6 +955,7 @@
         running = false;
         try { video.pause(); } catch (e) {}
         video.onended = null;
+        if (g) { g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
         
         setAR(true);
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
@@ -1035,17 +982,6 @@
       function loop() {
         if (!running) return;
         drawFrame();
-
-        var t = video.currentTime;
-        var shouldMute = false;
-        for (var i = 0; i < muteRanges.length; i++) {
-          if (t >= muteRanges[i].s && t < muteRanges[i].e) {
-            shouldMute = true;
-            break;
-          }
-        }
-        video.muted = shouldMute;
-
         var now = performance.now();
         if (now - lastUI > 250) {  
           lastUI = now;
@@ -1075,10 +1011,23 @@
         drawFrame();                            
         return Promise.resolve(video.play());
       }).then(function () {
+        if (g && g.ctx.state === 'suspended') return g.ctx.resume();
+      }).then(function () {
         var primed = 0;
         (function prime() {
           drawFrame();
           if (++primed < 4) { nextFrame(prime); return; }
+
+          if (g && muteRanges.length) {
+            var t0 = g.ctx.currentTime - video.currentTime;   
+            var gv = g.gain.gain;
+            gv.cancelScheduledValues(0);
+            gv.setValueAtTime(1, g.ctx.currentTime);
+            muteRanges.forEach(function (r) {
+              gv.setValueAtTime(0, Math.max(g.ctx.currentTime, t0 + r.s));
+              gv.setValueAtTime(1, t0 + r.e);
+            });
+          }
 
           video.onended = stopAll;
           rec.start(1000);
@@ -1087,7 +1036,7 @@
       }).catch(function (err) {
         running = false;
         setAR(true); 
-        resolve(file);
+        reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + (err && err.message ? err.message : err)));
       });
     });
   }
