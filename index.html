@@ -78,15 +78,13 @@
   .sheet-inner { background: var(--bone); color: var(--ink); padding: 26px var(--pad) calc(26px + env(safe-area-inset-bottom)); max-height: 95%; overflow-y: auto; border-radius: 16px 16px 0 0; }
   #closeInfoBtn { padding: 14px 22px; background: var(--ink); color: var(--bone); font-size: 16px; margin-top: 10px;}
 
-  /* --- Εργαλεία Upload & Edit (Μεγαλύτερος χώρος & Scroll) --- */
+  /* --- Εργαλεία Upload & Edit --- */
   #addBtn { position: fixed; bottom: calc(var(--handle) + var(--pad) + 70px); right: var(--pad); z-index: 25; width: 56px; height: 56px; border-radius: 50%; background: var(--chalk); color: var(--ink); font-size: 32px; font-weight: 300; display: none; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: auto; }
   #addBtn.on { display: flex; }
   body.drawer-open #addBtn { bottom: calc(52% + var(--pad)); }
 
   .edit-sheet { position: fixed; inset: 0; z-index: 60; display: none; flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.9); pointer-events: auto; }
   .edit-sheet.on { display: flex; }
-  
-  /* Αυξημένο max-height και padding για άνετο scrolling */
   .edit-sheet .sheet-inner { max-height: 95vh; overflow-y: auto; }
 
   .input-group { margin-bottom: 16px; }
@@ -97,7 +95,6 @@
   .btn-primary { background: var(--sea); color: var(--bone); }
   .btn-secondary { background: #ccc; color: var(--ink); }
 
-  /* Media List & Delete Button */
   #mediaList { margin-bottom: 15px; }
   .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
   .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
@@ -107,7 +104,8 @@
   #imageCanvas { width: 100%; display: block; }
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
-  #redactBox { position: absolute; border: 3px dashed red; background: rgba(0,0,0,0.5); display: none; cursor: move; }
+  #redactBox { position: absolute; border: 3px dashed var(--chalk); background: rgba(240,194,68,0.2); display: none; cursor: move; }
+  
   .mute-list { background: #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; color: #333; }
   .mute-item { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
   .mute-item input { width: 70px; padding: 5px; border-radius: 4px; border: 1px solid #ccc;}
@@ -150,7 +148,7 @@
   </div>
 </div>
 
-<!-- 1. Κεντρικό Μενού Upload (Με δυνατότητα Scroll) -->
+<!-- 1. Κεντρικό Μενού Upload -->
 <div id="uploadSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Νέα Ιστορία</h2>
@@ -192,21 +190,25 @@
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
-    <!-- Editor Βίντεο (Redact Box) -->
+    <!-- Editor Βίντεο (Blur Area & Mute Points) -->
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline></video>
         <div id="redactBox"></div>
       </div>
-      <p style="font-size:12px; color:var(--sea); margin:8px 0;">*Πάτα και σύρε στο βίντεο για να κρύψεις ένα σημείο (redact).</p>
+      <p style="font-size:12px; color:var(--sea); margin:8px 0;">*Σύρε το πλαίσιο στο βίντεο για να επιλέξεις περιοχή θολώματος (Blur).</p>
+      
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Σημεία Σίγασης Ήχου στο Βίντεο (Mute):</label>
+      <div id="videoMuteList" class="mute-list"></div>
+      <button onclick="addVideoMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Σημείου Mute</button>
     </div>
 
     <!-- Editor Ήχου (Mute) -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
       <audio id="audioPreview" controls style="width:100%; margin-bottom:10px;"></audio>
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Mute):</label>
-      <div id="muteList" class="mute-list"></div>
-      <button onclick="addMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Σημείου</button>
+      <div id="audioMuteList" class="mute-list"></div>
+      <button onclick="addAudioMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Σημείου</button>
     </div>
 
     <div class="btn-row">
@@ -216,20 +218,18 @@
     
     <div id="processingOverlay">
       <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία...</h3>
-      <p style="font-size:14px; margin:0;">Το αρχείο καταγράφεται τοπικά. Παρακαλώ περιμένετε.</p>
+      <p style="font-size:14px; margin:0;">Το αρχείο καταγράφεται τοπικά με θόλωμα και mute. Παρακαλώ περιμένετε.</p>
     </div>
   </div>
 </div>
 
-<!-- 3. ΝΕΟ: Μενού Τοπικής Προβολής Αρχείων -->
+<!-- 3. Μενού Τοπικής Προβολής Αρχείων -->
 <div id="previewSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Τα Αρχεία σου (Τοπική Προβολή)</h2>
-    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Μπορείς να ελέγξεις τα επεξεργασμένα αρχεία σουπριν αποθηκευτούν:</p>
+    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου:</p>
     
-    <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;">
-      <!-- Εδώ θα φορτώνονται τα previews δυναμικά -->
-    </div>
+    <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
 
     <button class="btn-primary" onclick="$('previewSheet').classList.remove('on')" style="width:100%;">Κλείσιμο Προβολής</button>
   </div>
@@ -434,7 +434,7 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (ΕΝΑ-ΕΝΑ) + DELETE + LOCAL VIEW
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (BLUR VIDEO & MUTE AUDIO)
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
@@ -442,14 +442,23 @@
 
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d'), imgObj = null, isDrawing = false;
   var imageHistory = []; 
+  
   var vContainer = $('videoContainer'), redactBox = $('redactBox'), isDraggingBox = false, boxRect = {x:0,y:0,w:0,h:0}, startDrag = {x:0,y:0};
 
-  window.addMuteRow = function() {
+  window.addAudioMuteRow = function() {
     var div = document.createElement('div'); div.className = 'mute-item';
     div.innerHTML = `Από: <input type="number" step="1" min="0" class="mute-start">s 
                      Έως: <input type="number" step="1" min="0" class="mute-end">s 
                      <button onclick="this.parentElement.remove()" style="color:red; background:none; font-weight:bold;">X</button>`;
-    $('muteList').appendChild(div);
+    $('audioMuteList').appendChild(div);
+  };
+
+  window.addVideoMuteRow = function() {
+    var div = document.createElement('div'); div.className = 'mute-item';
+    div.innerHTML = `Από: <input type="number" step="1" min="0" class="vmute-start">s 
+                     Έως: <input type="number" step="1" min="0" class="vmute-end">s 
+                     <button onclick="this.parentElement.remove()" style="color:red; background:none; font-weight:bold;">X</button>`;
+    $('videoMuteList').appendChild(div);
   };
 
   window.cancelStory = function() {
@@ -460,7 +469,6 @@
   };
 
   $('addBtn').onclick = () => { if(me) $('uploadSheet').classList.add('on'); };
-  
   $('triggerFileBtn').onclick = () => $('singleFileInput').click();
 
   $('singleFileInput').onchange = function(e) {
@@ -476,7 +484,8 @@
     $('videoEditor').style.display = 'none'; 
     $('audioEditor').style.display = 'none';
     redactBox.style.display = 'none'; 
-    $('muteList').innerHTML = '';
+    $('audioMuteList').innerHTML = '';
+    $('videoMuteList').innerHTML = '';
     
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(currentFile);
@@ -491,10 +500,11 @@
     else if(currentFile.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block'; 
       var vid = $('videoPreview'); vid.src = currentObjectURL; boxRect = {x:0,y:0,w:0,h:0};
+      window.addVideoMuteRow();
     }
     else if(currentFile.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block'; 
-      $('audioPreview').src = currentObjectURL; window.addMuteRow();
+      $('audioPreview').src = currentObjectURL; window.addAudioMuteRow();
     }
   };
 
@@ -526,7 +536,7 @@
     }
   };
 
-  // Redact Box Βίντεο
+  // Redact Box Βίντεο (Για την περιοχή θολώματος)
   vContainer.onpointerdown = e => {
     isDraggingBox = true; var rect = vContainer.getBoundingClientRect(); startDrag = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     boxRect = {x: startDrag.x, y: startDrag.y, w: 0, h: 0};
@@ -569,7 +579,6 @@
     currentFile = null;
   };
 
-  // Συνάρτηση Διαγραφής πολυμέσου από τη λίστα
   window.removeMedia = function(index) {
     processedFiles.splice(index, 1);
     updateMediaListUI();
@@ -582,24 +591,20 @@
       return;
     }
     var html = '';
-    processedFiles.forEach((f, i) => {
-      html += `<div class="media-list-item">
-                 <span>${i+1}. ${f.name}</span>
-                 <button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button>
-               </div>`;
+    processedFiles.2each ? processedFiles.forEach((f, i) => {
+      html += `<div class="media-list-item"><span>${i+1}. ${f.name}</span><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div>`;
+    }) : processedFiles.forEach((f, i) => {
+      html += `<div class="media-list-item"><span>${i+1}. ${f.name}</span><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div>`;
     });
     list.innerHTML = html;
   }
 
-  // Ολοκλήρωση Ιστορίας & Προβολή Τοπικών Αρχείων
   $('finishStoryBtn').onclick = function() {
     var title = $('storyTitle').value;
     if (!title) return alert("Βάλε έναν τίτλο για την ιστορία σου.");
     if (processedFiles.length === 0) return alert("Πρόσθεσε τουλάχιστον ένα αρχείο.");
 
     $('uploadSheet').classList.remove('on');
-    
-    // Δημιουργία προεπισκόπησης των αρχείων τοπικά
     var container = $('localPreviewContainer');
     container.innerHTML = '';
     
@@ -607,7 +612,6 @@
       var itemBox = document.createElement('div');
       itemBox.style.cssText = "background:#f0f0f0; padding:10px; border-radius:6px; color:#333;";
       itemBox.innerHTML = `<p style="margin:0 0 5px; font-weight:bold;">${i+1}. ${f.name}</p>`;
-      
       var blobUrl = f.dataURL ? f.dataURL : URL.createObjectURL(f.blob);
       
       if (f.type.startsWith('image/')) {
@@ -617,33 +621,62 @@
       } else if (f.type.startsWith('audio/')) {
         itemBox.innerHTML += `<audio src="${blobUrl}" controls style="width:100%;"></audio>`;
       }
-      
       container.appendChild(itemBox);
     });
 
     $('previewSheet').classList.add('on');
-    
     $('storyTitle').value = ''; 
     processedFiles = [];
     updateMediaListUI();
   };
 
-  // Επεξεργαστές (Local)
+  // --- Επεξεργαστής Βίντεο: BLUR αντί για μαύρο + Mute σημεία ---
   function processVideoLocal(file) {
     return new Promise((resolve) => {
       var video = $('videoPreview'), oCanvas = document.createElement('canvas'), oCtx = oCanvas.getContext('2d');
+      var blurCanvas = document.createElement('canvas'), blurCtx = blurCanvas.getContext('2d');
+      
       var vRect = video.getBoundingClientRect();
       var pX = boxRect.w===0 ? 0 : boxRect.x/vRect.width, pY = boxRect.w===0 ? 0 : boxRect.y/vRect.height;
       var pW = boxRect.w===0 ? 0 : boxRect.w/vRect.width, pH = boxRect.w===0 ? 0 : boxRect.h/vRect.height;
 
       oCanvas.width = video.videoWidth; oCanvas.height = video.videoHeight;
+      blurCanvas.width = video.videoWidth; blurCanvas.height = video.videoHeight;
+      
       var canvasStream = oCanvas.captureStream(30), finalStream = canvasStream;
       
+      // Διαχείριση Mute διαστημάτων στο βίντεο μέσω Web Audio API
+      var vmRanges = [];
+      document.querySelectorAll('.mute-item').forEach(el => {
+        var sInput = el.querySelector('.vmute-start');
+        var eInput = el.querySelector('.vmute-end');
+        if(sInput && eInput) {
+          var s = parseFloat(sInput.value), end = parseFloat(eInput.value);
+          if(!isNaN(s) && !isNaN(end) && end>s) vmRanges.push({s:s, e:end});
+        }
+      });
+
       try {
         var aCtx = new (window.AudioContext || window.webkitAudioContext)();
-        var src = aCtx.createMediaElementSource(video), dest = aCtx.createMediaStreamDestination();
-        src.connect(dest); src.connect(aCtx.destination);
-        if(dest.stream.getAudioTracks().length > 0) finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        var src = aCtx.createMediaElementSource(video);
+        var gainNode = aCtx.createGain();
+        gainNode.gain.setValueAtTime(1, 0);
+        
+        vmRanges.forEach(r => {
+          gainNode.gain.setValueAtTime(1, Math.max(0, r.s-0.01));
+          gainNode.gain.setValueAtTime(0, r.s);
+          gainNode.gain.setValueAtTime(0, r.e);
+          gainNode.gain.setValueAtTime(1, r.e+0.01);
+        });
+
+        var dest = aCtx.createMediaStreamDestination();
+        src.connect(gainNode);
+        gainNode.connect(dest);
+        src.connect(aCtx.destination); // Για αναπαραγωγή τοπικά
+
+        if(dest.stream.getAudioTracks().length > 0) {
+          finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+        }
       } catch(e){}
 
       var rec = new MediaRecorder(finalStream, {mimeType: 'video/webm'}), chunks = [];
@@ -652,22 +685,45 @@
       
       function drawFrame() {
         if(video.paused || video.ended) return;
+        
+        // 1. Σχεδιάζουμε ολόκληρο το βίντεο θολωμένο στο background canvas
+        blurCtx.filter = 'blur(20px)';
+        blurCtx.drawImage(video, 0, 0, blurCanvas.width, blurCanvas.height);
+        
+        // 2. Σχεδιάζουμε το κανονικό βίντεο στο κανονικό canvas
         oCtx.drawImage(video, 0, 0, oCanvas.width, oCanvas.height);
-        if (pW > 0 && pH > 0) { oCtx.fillStyle = 'black'; oCtx.fillRect(pX*oCanvas.width, pY*oCanvas.height, pW*oCanvas.width, pH*oCanvas.height); }
+        
+        // 3. Αν έχει επιλεχθεί περιοχή, κόβουμε (clip) και περνάμε το θολωμένο κομμάτι πάνω από την περιοχή ενδιαφέροντος
+        if (pW > 0 && pH > 0) {
+          oCtx.save();
+          oCtx.beginPath();
+          oCtx.rect(pX*oCanvas.width, pY*oCanvas.height, pW*oCanvas.width, pH*oCanvas.height);
+          oCtx.clip();
+          oCtx.drawImage(blurCanvas, 0, 0);
+          oCtx.restore();
+        }
+
         requestAnimationFrame(drawFrame);
       }
-      video.currentTime = 0; video.play().then(() => { rec.start(); drawFrame(); });
+
+      video.currentTime = 0; 
+      video.play().then(() => { 
+        if(window.AudioContext) aCtx.resume();
+        rec.start(); 
+        drawFrame(); 
+      });
       video.onended = () => rec.stop();
     });
   }
 
+  // --- Επεξεργαστής Ήχου (Mute points) ---
   function processAudioLocal(file) {
     return new Promise((resolve) => {
       var reader = new FileReader();
       reader.onload = async e => {
         var aCtx = new (window.AudioContext || window.webkitAudioContext)(), aBuf = await aCtx.decodeAudioData(e.target.result);
         var mRanges = [];
-        document.querySelectorAll('.mute-item').forEach(el => {
+        document.querySelectorAll('#audioMuteList .mute-item').forEach(el => {
           var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
           if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
         });
