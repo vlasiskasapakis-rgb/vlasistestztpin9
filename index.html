@@ -87,11 +87,15 @@
   .edit-sheet.on { display: flex; }
   .input-group { margin-bottom: 16px; }
   .input-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--sea); }
-  .input-group input[type="text"], .input-group input[type="file"] { width: 100%; padding: 10px; border: 2px solid #ccc; border-radius: 6px; font-size: 16px; }
+  .input-group input[type="text"] { width: 100%; padding: 10px; border: 2px solid #ccc; border-radius: 6px; font-size: 16px; }
   .btn-row { display: flex; gap: 10px; margin-top: 20px; }
   .btn-row button { flex: 1; padding: 14px; font-size: 16px; font-weight: 600; border-radius: 6px; }
   .btn-primary { background: var(--sea); color: var(--bone); }
   .btn-secondary { background: #ccc; color: var(--ink); }
+
+  /* Media List */
+  #mediaList { margin-bottom: 15px; }
+  .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
 
   /* Editor Canvas & Box */
   .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; touch-action: none; }
@@ -141,40 +145,46 @@
   </div>
 </div>
 
-<!-- 1. Μενού Upload -->
+<!-- 1. Κεντρικό Μενού Upload -->
 <div id="uploadSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Νέα Ιστορία</h2>
     <div class="input-group">
       <label>Τοποθεσία (Κλειδωμένη στο στίγμα σου)</label>
-      <div id="locDisplay" style="font-family:monospace; padding:8px; background:#e0e0e0; border-radius:4px;">Αναμονή...</div>
+      <div id="locDisplay" style="font-family:monospace; padding:8px; background:#e0e0e0; border-radius:4px; color:#333;">Αναμονή...</div>
     </div>
     <div class="input-group">
       <label>Τίτλος Ιστορίας</label>
       <input type="text" id="storyTitle" placeholder="π.χ. Η παλιά αγορά">
     </div>
+    
     <div class="input-group">
-      <label>Πολυμέσα (Μπορείς να επιλέξεις πολλά)</label>
-      <input type="file" id="mediaFiles" multiple accept="image/*,video/*,audio/*">
+      <label>Έτοιμα Πολυμέσα</label>
+      <div id="mediaList">
+        <p style="font-size:13px; color:#666; margin:0;">Δεν έχεις προσθέσει αρχεία ακόμα.</p>
+      </div>
+      <!-- Το κρυφό input για επιλογή ενός αρχείου τη φορά -->
+      <input type="file" id="singleFileInput" accept="image/*,video/*,audio/*" style="display:none;">
+      <button class="btn-secondary" id="triggerFileBtn" style="width:100%; padding:10px; margin-top:5px; border: 2px dashed #999;">+ Προσθήκη Αρχείου</button>
     </div>
+
     <div class="btn-row">
-      <button class="btn-secondary" onclick="document.getElementById('uploadSheet').classList.remove('on')">Ακύρωση</button>
-      <button class="btn-primary" id="startEditBtn">Επεξεργασία</button>
+      <button class="btn-secondary" onclick="cancelStory()">Ακύρωση</button>
+      <button class="btn-primary" id="finishStoryBtn">Ολοκλήρωση Ιστορίας</button>
     </div>
   </div>
 </div>
 
-<!-- 2. Μενού Επεξεργασίας (Queue) -->
+<!-- 2. Editor Αρχείου -->
 <div id="editorSheet" class="edit-sheet">
   <div class="sheet-inner" style="position: relative;">
-    <h2 id="editorTitle">Επεξεργασία 1/1</h2>
+    <h2 id="editorTitle">Επεξεργασία Αρχείου</h2>
     <p id="editorFilename" style="font-size:13px; color:var(--sea); margin-top:-10px; margin-bottom:15px;">αρχείο.jpg</p>
     
     <!-- Editor Εικόνας (Blur) -->
     <div id="imageEditor" class="editor-box">
       <canvas id="imageCanvas"></canvas>
       <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); color:white; padding:4px 8px; font-size:12px; border-radius:4px; pointer-events:none;">Σύρε το δάχτυλο για θόλωμα</div>
-      <!-- ΚΟΥΜΠΙ UNDO -->
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
@@ -196,8 +206,8 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn-secondary" onclick="cancelEditing()">Ακύρωση Όλων</button>
-      <button class="btn-primary" id="nextFileBtn">Αποθήκευση & Επόμενο</button>
+      <button class="btn-secondary" id="cancelSingleBtn">Άκυρο Αρχείου</button>
+      <button class="btn-primary" id="saveFileBtn">Αποθήκευση</button>
     </div>
     
     <div id="processingOverlay">
@@ -210,7 +220,6 @@
 <script>
 (function () {
   'use strict';
-
   var $ = function(id) { return document.getElementById(id); };
 
   // ==========================================
@@ -218,9 +227,7 @@
   // ==========================================
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης.' },
-    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' },
-    { id: 'mitropoli', title: 'Μητρόπολη', subtitle: 'Άγιος Αθανάσιος', lat: 39.108346, lon: 26.557850, radius: 30, text: 'Ο Μητροπολιτικός Ναός.' },
-    { id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Ερμού (Βόρεια)', lat: 39.110373, lon: 26.557807, radius: 30, text: 'Το παλιό οθωμανικό τέμενος.' }
+    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
   ];
 
   var SMOOTHING = 0.1, MIN_DIST = 2, Y_OFF = 1.2;
@@ -389,12 +396,14 @@
     $('locDisplay').textContent = `${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}`;
     
     var ranked = STORIES.map(s => ({s:s, d:distanceMetres(me.lat, me.lon, s.lat, s.lon)})).sort((a,b)=>a.d-b.d)[0];
-    var btn = $('nearest'); btn.querySelector('.dist').textContent = (ranked.d <= ranked.s.radius) ? 'Είσαι εδώ' : `${Math.round(ranked.d)}m μακριά`;
-    btn.querySelector('.name').textContent = ranked.s.title;
-    btn.classList.add('on'); btn.onclick = () => {
-      $('sheetTitle').textContent = ranked.s.title; $('sheetSub').textContent = ranked.s.subtitle; $('sheetBody').textContent = ranked.s.text;
-      $('infoSheet').classList.add('on');
-    };
+    if(ranked) {
+      var btn = $('nearest'); btn.querySelector('.dist').textContent = (ranked.d <= ranked.s.radius) ? 'Είσαι εδώ' : `${Math.round(ranked.d)}m μακριά`;
+      btn.querySelector('.name').textContent = ranked.s.title;
+      btn.classList.add('on'); btn.onclick = () => {
+        $('sheetTitle').textContent = ranked.s.title; $('sheetSub').textContent = ranked.s.subtitle; $('sheetBody').textContent = ranked.s.text;
+        $('infoSheet').classList.add('on');
+      };
+    }
   }
 
   $('startBtn').addEventListener('click', function() {
@@ -407,14 +416,15 @@
     }).catch(e => { this.disabled = false; this.textContent = 'Δοκίμασε ξανά'; alert(e); });
   });
 
+  // ==========================================
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (ΕΝΑ-ΕΝΑ ΑΡΧΕΙΟ)
+  // ==========================================
+  var processedFiles = []; 
+  var currentFile = null;
+  var currentObjectURL = null;
 
-  // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (EDITOR) 
-  // ==========================================
-  var filesQueue = [], processedFiles = [], currentIndex = 0, currentObjectURL = null;
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d'), imgObj = null, isDrawing = false;
-  var imageHistory = []; // ΝΕΟ: Για το Undo της εικόνας
-  
+  var imageHistory = []; // Για το Undo
   var vContainer = $('videoContainer'), redactBox = $('redactBox'), isDraggingBox = false, boxRect = {x:0,y:0,w:0,h:0}, startDrag = {x:0,y:0};
 
   window.addMuteRow = function() {
@@ -425,42 +435,54 @@
     $('muteList').appendChild(div);
   };
 
-  $('addBtn').onclick = () => { if(me) $('uploadSheet').classList.add('on'); };
-  
-  $('startEditBtn').onclick = () => {
-    if(!$('storyTitle').value || $('mediaFiles').files.length === 0) return alert('Τίτλος και αρχεία είναι υποχρεωτικά.');
-    filesQueue = Array.from($('mediaFiles').files); processedFiles = []; currentIndex = 0;
-    $('uploadSheet').classList.remove('on'); loadEditor();
+  window.cancelStory = function() {
+    $('uploadSheet').classList.remove('on');
+    $('storyTitle').value = '';
+    processedFiles = [];
+    updateMediaListUI();
   };
 
-  function loadEditor() {
-    if (currentIndex >= filesQueue.length) return finishProcess();
-    var file = filesQueue[currentIndex];
-    $('editorSheet').classList.add('on');
-    $('editorTitle').textContent = `Επεξεργασία ${currentIndex+1}/${filesQueue.length}`;
-    $('editorFilename').textContent = file.name;
-    $('nextFileBtn').textContent = (currentIndex === filesQueue.length - 1) ? 'Ολοκλήρωση' : 'Επόμενο';
+  $('addBtn').onclick = () => { if(me) $('uploadSheet').classList.add('on'); };
+  
+  // 1. Πατάς "Προσθήκη Αρχείου", ανοίγει ο file explorer
+  $('triggerFileBtn').onclick = () => $('singleFileInput').click();
+
+  // 2. Μόλις διαλέξεις ένα αρχείο, ανοίγει ο Editor
+  $('singleFileInput').onchange = function(e) {
+    if(this.files.length === 0) return;
+    currentFile = this.files[0];
+    this.value = ''; // Reset input
     
-    $('imageEditor').style.display = 'none'; $('videoEditor').style.display = 'none'; $('audioEditor').style.display = 'none';
-    redactBox.style.display = 'none'; $('muteList').innerHTML = '';
+    $('uploadSheet').classList.remove('on');
+    $('editorSheet').classList.add('on');
+    $('editorFilename').textContent = currentFile.name;
+    
+    // Κρύψε τα πάντα στην αρχή
+    $('imageEditor').style.display = 'none'; 
+    $('videoEditor').style.display = 'none'; 
+    $('audioEditor').style.display = 'none';
+    redactBox.style.display = 'none'; 
+    $('muteList').innerHTML = '';
     
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
-    currentObjectURL = URL.createObjectURL(file);
+    currentObjectURL = URL.createObjectURL(currentFile);
     
-    if(file.type.startsWith('image/')) {
+    if(currentFile.type.startsWith('image/')) {
       $('imageEditor').style.display = 'block'; 
-      imageHistory = []; // Καθαρισμός ιστορικού (Undo)
+      imageHistory = []; 
       imgObj = new Image();
       imgObj.onload = () => { canvas.width = imgObj.width; canvas.height = imgObj.height; ctx.drawImage(imgObj, 0, 0); };
       imgObj.src = currentObjectURL;
     } 
-    else if(file.type.startsWith('video/')) {
-      $('videoEditor').style.display = 'block'; var vid = $('videoPreview'); vid.src = currentObjectURL; boxRect = {x:0,y:0,w:0,h:0};
+    else if(currentFile.type.startsWith('video/')) {
+      $('videoEditor').style.display = 'block'; 
+      var vid = $('videoPreview'); vid.src = currentObjectURL; boxRect = {x:0,y:0,w:0,h:0};
     }
-    else if(file.type.startsWith('audio/')) {
-      $('audioEditor').style.display = 'block'; $('audioPreview').src = currentObjectURL; window.addMuteRow();
+    else if(currentFile.type.startsWith('audio/')) {
+      $('audioEditor').style.display = 'block'; 
+      $('audioPreview').src = currentObjectURL; window.addMuteRow();
     }
-  }
+  };
 
   // --- Blur Εικόνας & Undo Logic ---
   function getMousePos(e) {
@@ -468,32 +490,24 @@
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
     return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
   }
-  
   function drawBlur(pos) { 
     ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); 
     ctx.filter = 'blur(15px)'; ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height); ctx.restore(); 
   }
-  
   canvas.onpointerdown = e => { 
     isDrawing = true; 
-    // ΝΕΟ: Αποθήκευση της κατάστασης ΠΡΙΝ ζωγραφίσει οτιδήποτε (για το Undo)
     imageHistory.push(canvas.toDataURL());
     drawBlur(getMousePos(e)); 
     canvas.setPointerCapture(e.pointerId); 
   };
-  
   canvas.onpointermove = e => { if(isDrawing) drawBlur(getMousePos(e)); };
   canvas.onpointerup = () => isDrawing = false;
   
-  // ΝΕΟ: Undo Event Listener
   $('undoBlurBtn').onclick = () => {
     if (imageHistory.length > 0) {
-      var lastState = imageHistory.pop(); // Παίρνουμε την τελευταία αποθηκευμένη εικόνα
+      var lastState = imageHistory.pop();
       var tempImg = new Image();
-      tempImg.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(tempImg, 0, 0); // Την ξαναζωγραφίζουμε στον καμβά
-      };
+      tempImg.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(tempImg, 0, 0); };
       tempImg.src = lastState;
     }
   };
@@ -513,27 +527,67 @@
   };
   vContainer.onpointerup = () => isDraggingBox = false;
 
-  window.cancelEditing = function() { $('editorSheet').classList.remove('on'); $('uploadSheet').classList.add('on'); };
 
-  $('nextFileBtn').onclick = async function() {
-    var file = filesQueue[currentIndex];
+  // 3. Ακύρωση του τρέχοντος αρχείου
+  $('cancelSingleBtn').onclick = () => {
+    currentFile = null;
+    $('editorSheet').classList.remove('on');
+    $('uploadSheet').classList.add('on');
+  };
+
+  // 4. Αποθήκευση του τρέχοντος αρχείου
+  $('saveFileBtn').onclick = async function() {
     $('processingOverlay').style.display = 'flex';
     
     try {
-      if (file.type.startsWith('image/')) {
-        processedFiles.push({ name: file.name, type: 'image/jpeg', dataURL: canvas.toDataURL('image/jpeg', 0.8) });
+      if (currentFile.type.startsWith('image/')) {
+        processedFiles.push({ name: currentFile.name, type: 'image/jpeg', dataURL: canvas.toDataURL('image/jpeg', 0.8) });
       } 
-      else if (file.type.startsWith('video/')) {
-        processedFiles.push({ name: file.name, type: 'video/webm', blob: await processVideoLocal(file) });
+      else if (currentFile.type.startsWith('video/')) {
+        processedFiles.push({ name: currentFile.name, type: 'video/webm', blob: await processVideoLocal(currentFile) });
       }
-      else if (file.type.startsWith('audio/')) {
-        processedFiles.push({ name: file.name, type: 'audio/wav', blob: await processAudioLocal(file) });
+      else if (currentFile.type.startsWith('audio/')) {
+        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: await processAudioLocal(currentFile) });
       }
+      updateMediaListUI();
     } catch (e) { alert("Σφάλμα: " + e.message); }
     
-    $('processingOverlay').style.display = 'none'; currentIndex++; loadEditor();
+    $('processingOverlay').style.display = 'none'; 
+    $('editorSheet').classList.remove('on');
+    $('uploadSheet').classList.add('on');
+    currentFile = null;
   };
 
+  function updateMediaListUI() {
+    var list = $('mediaList');
+    if (processedFiles.length === 0) {
+      list.innerHTML = '<p style="font-size:13px; color:#666; margin:0;">Δεν έχεις προσθέσει αρχεία ακόμα.</p>';
+      return;
+    }
+    var html = '';
+    processedFiles.forEach((f, i) => {
+      html += `<div class="media-list-item"><span>${i+1}. ${f.name}</span></div>`;
+    });
+    list.innerHTML = html;
+  }
+
+  // 5. Ολοκλήρωση Ιστορίας
+  $('finishStoryBtn').onclick = function() {
+    var title = $('storyTitle').value;
+    if (!title) return alert("Βάλε έναν τίτλο για την ιστορία σου.");
+    if (processedFiles.length === 0) return alert("Πρόσθεσε τουλάχιστον ένα αρχείο.");
+
+    $('uploadSheet').classList.remove('on');
+    var msg = `Ιστορία: "${title}"\nΤοποθεσία: ${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}\n\nΑρχεία:\n`;
+    processedFiles.forEach((f, i) => msg += `${i+1}. ${f.name} (${f.type})\n`);
+    alert(msg);
+    
+    $('storyTitle').value = ''; 
+    processedFiles = [];
+    updateMediaListUI();
+  };
+
+  // Επεξεργαστές (Local)
   function processVideoLocal(file) {
     return new Promise((resolve) => {
       var video = $('videoPreview'), oCanvas = document.createElement('canvas'), oCtx = oCanvas.getContext('2d');
@@ -601,14 +655,6 @@
       };
       reader.readAsArrayBuffer(file);
     });
-  }
-
-  function finishProcess() {
-    $('editorSheet').classList.remove('on');
-    var msg = `Ιστορία: "${$('storyTitle').value}"\nΤοποθεσία: ${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}\n\nΑρχεία (Επεξεργασμένα & Τοπικά):\n`;
-    processedFiles.forEach((f, i) => msg += `${i+1}. ${f.name} (${f.type})\n`);
-    alert(msg);
-    $('storyTitle').value = ''; $('mediaFiles').value = '';
   }
 })();
 </script>
