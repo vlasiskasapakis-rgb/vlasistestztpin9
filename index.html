@@ -3,26 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>Διαδρομή μνήμης — Μυτιλήνη (Με Editor Πολυμέσων)</title>
+<title>Διαδρομή μνήμης — Μυτιλήνη</title>
 
-<!-- ΤΟ SCRIPT ΓΙΑ ΤΑ HEADERS ΣΤΟ GITHUB PAGES -->
-<script src="coi-serviceworker.min.js"></script>
+<!--
+  WALKING MEMORY (GA 101288157) — spike για το Task 4.2.
+  ΑΠΑΙΤΕΙ HTTPS. Προστέθηκε MarkerCluster, δυναμικό AR Cluster & Βελτιωμένος ρυθμός ανανέωσης GPS.
+-->
 
-<!-- LEAFLET CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
 
-<!-- SCRIPTS: LEAFLET & AR.JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
-
-<!-- SCRIPTS: FFMPEG.WASM -->
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
 
 <style>
   :root {
@@ -34,24 +30,32 @@
   html, body {
     width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
     background: var(--ink); color: var(--bone);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", "Noto Sans", sans-serif;
     font-size: 17px; line-height: 1.5; -webkit-text-size-adjust: 100%;
   }
   button { font: inherit; cursor: pointer; border: 0; border-radius: 2px; }
   button:focus-visible { outline: 3px solid var(--chalk); outline-offset: 3px; }
   img.labelsrc { display: none; }
-  a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
+  a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important;
+                               width: 100% !important; height: 100% !important; z-index: 0; }
 
-  /* UI MAP & AR */
   #gate {
-    position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end;
+    position: fixed; inset: 0; z-index: 40;
+    display: flex; flex-direction: column; justify-content: flex-end;
     padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom));
     background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%);
   }
-  #gate h1 { font-size: 30px; line-height: 1.15; font-weight: 600; margin: 0 0 12px; max-width: 15ch; }
+  #gate h1 {
+    font-size: 30px; line-height: 1.15; font-weight: 600;
+    letter-spacing: -0.01em; margin: 0 0 12px; max-width: 15ch;
+  }
   #gate .rule { height: 2px; width: 44px; background: var(--chalk); margin: 0 0 22px; }
   #gate p { margin: 0 0 6px; max-width: 40ch; font-size: 15px; color: rgba(242,237,228,.72); }
-  #startBtn { margin-top: 26px; width: 100%; padding: 17px; background: var(--chalk); color: var(--ink); font-size: 18px; font-weight: 600; }
+  #startBtn {
+    margin-top: 26px; width: 100%; padding: 17px;
+    background: var(--chalk); color: var(--ink); font-size: 18px; font-weight: 600;
+  }
   #startBtn[disabled] { opacity: .5; }
 
   #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; display: none; }
@@ -61,115 +65,170 @@
     left: var(--pad); right: var(--pad); padding: 9px 13px;
     background: rgba(14,42,46,.92); font-size: 14px; font-variant-numeric: tabular-nums;
   }
-  
-  #openUploadBtn {
-    position: absolute; top: calc(var(--pad) + env(safe-area-inset-top) + 40px);
-    right: var(--pad); padding: 10px 15px;
-    background: var(--chalk); color: var(--ink); font-weight: 600;
-    border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.3); pointer-events: auto;
-  }
-
   #drawer {
-    position: fixed; left: 0; right: 0; bottom: 0; height: 52%; z-index: 15; display: flex; flex-direction: column;
-    transform: translateY(calc(100% - var(--handle))); transition: transform .28s cubic-bezier(.32,.72,0,1);
+    position: fixed; left: 0; right: 0; bottom: 0; height: 52%;
+    z-index: 15; display: flex; flex-direction: column;
+    transform: translateY(calc(100% - var(--handle)));
+    transition: transform .28s cubic-bezier(.32,.72,0,1);
+    will-change: transform;
   }
   #drawer.open { transform: translateY(0); }
-  #handle { flex: none; height: var(--handle); width: 100%; display: flex; align-items: center; gap: 11px; padding: 0 var(--pad); background: var(--ink); color: var(--bone); border-top: 3px solid var(--chalk); touch-action: none; pointer-events: auto; }
-  #handle .grip { width: 34px; height: 4px; border-radius: 2px; background: rgba(242,237,228,.45); flex: none; }
+
+  #handle {
+    flex: none; height: var(--handle); width: 100%;
+    display: flex; align-items: center; gap: 11px;
+    padding: 0 var(--pad);
+    background: var(--ink); color: var(--bone);
+    border-top: 3px solid var(--chalk);
+    text-align: left; touch-action: none;
+  }
+  #handle .grip {
+    width: 34px; height: 4px; border-radius: 2px;
+    background: rgba(242,237,228,.45); flex: none;
+  }
   #handle .lbl { font-size: 15px; font-weight: 600; }
   #handle .hint { font-size: 13px; color: #8FC0C4; margin-left: auto; }
-  #map { flex: 1; background: #0A1F22; pointer-events: auto; }
-  
+
+  #map { flex: 1; background: #0A1F22; }
+
   .leaflet-container { background: #0A1F22; font-family: inherit; }
-  .leaflet-control-attribution { background: rgba(14,42,46,.85) !important; color: #B9CFD1 !important; font-size: 10px !important; }
-  .map-cluster-dot { background: var(--sea); color: var(--bone); border: 3px solid var(--ink); border-radius: 50%; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-  
-  #compass { position: absolute; top: calc(var(--handle) + 10px); right: 10px; z-index: 500; width: 54px; height: 54px; border-radius: 50%; background: rgba(14,42,46,.92); color: var(--bone); display: flex; align-items: center; justify-content: center; }
-  #compass .needle { position: absolute; inset: 0; transform-origin: 50% 50%; }
-  #compass .needle::before { content: ''; position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 19px solid var(--chalk); }
-  #compass .needle::after { content: ''; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 19px solid rgba(242,237,228,.28); }
-  #compass .deg { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 10px; color: #8FC0C4; }
+  .leaflet-control-attribution {
+    background: rgba(14,42,46,.85) !important; color: #B9CFD1 !important;
+    font-size: 10px !important;
+  }
+  .leaflet-control-attribution a { color: var(--chalk) !important; }
+
+  .map-cluster-dot {
+    background: var(--sea);
+    color: var(--bone);
+    border: 3px solid var(--ink);
+    border-radius: 50%;
+    font-size: 14px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+  }
+
+  #compass {
+    position: absolute; top: calc(var(--handle) + 10px); right: 10px; z-index: 500;
+    width: 54px; height: 54px; border-radius: 50%;
+    background: rgba(14,42,46,.92); color: var(--bone);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #compass .needle {
+    position: absolute; inset: 0; transform-origin: 50% 50%;
+  }
+  #compass .needle::before {
+    content: ''; position: absolute; left: 50%; top: 8px;
+    transform: translateX(-50%);
+    width: 0; height: 0; border-left: 7px solid transparent;
+    border-right: 7px solid transparent; border-bottom: 19px solid var(--chalk);
+  }
+  #compass .needle::after {
+    content: ''; position: absolute; left: 50%; bottom: 12px;
+    transform: translateX(-50%);
+    width: 0; height: 0; border-left: 7px solid transparent;
+    border-right: 7px solid transparent; border-top: 19px solid rgba(242,237,228,.28);
+  }
+  #compass .deg {
+    position: absolute; bottom: 3px; left: 0; right: 0; text-align: center;
+    font-size: 10px; font-variant-numeric: tabular-nums; color: #8FC0C4;
+  }
 
   .me-wrap { position: relative; width: 56px; height: 56px; }
   .me-rot  { position: absolute; inset: 0; transform-origin: 50% 50%; }
-  .me-cone { position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 17px solid transparent; border-right: 17px solid transparent; border-top: 30px solid rgba(240, 194, 68, 0.88); filter: drop-shadow(0 0 2px rgba(14, 42, 46, 0.95)); }
+  .me-cone {
+    position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 17px solid transparent;
+    border-right: 17px solid transparent;
+    border-top: 30px solid rgba(240, 194, 68, 0.88);
+    filter: drop-shadow(0 0 2px rgba(14, 42, 46, 0.95));
+  }
   .me-rot.unknown .me-cone { display: none; }
-  .me-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; background: var(--chalk); border: 3px solid var(--ink); }
-  .poi-dot { width: 13px; height: 13px; border-radius: 50%; background: var(--bone); border: 3px solid var(--chalk); }
+  .me-dot {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--chalk); border: 3px solid var(--ink);
+  }
+  .poi-dot {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--bone); border: 3px solid var(--chalk);
+  }
 
-  #nearest { position: absolute; left: var(--pad); right: var(--pad); bottom: calc(var(--handle) + var(--pad)); transition: bottom .28s cubic-bezier(.32,.72,0,1); pointer-events: auto; display: none; width: calc(100% - var(--pad)*2); text-align: left; padding: 15px 17px; background: var(--bone); color: var(--ink); border-left: 5px solid var(--chalk); }
+  #nearest {
+    position: absolute; left: var(--pad); right: var(--pad);
+    bottom: calc(var(--handle) + var(--pad));
+    transition: bottom .28s cubic-bezier(.32,.72,0,1);
+    pointer-events: auto; display: none; width: calc(100% - var(--pad)*2);
+    text-align: left; padding: 15px 17px; background: var(--bone);
+    color: var(--ink); border-left: 5px solid var(--chalk);
+  }
   #nearest.on { display: block; }
   body.drawer-open #nearest { bottom: calc(52% + var(--pad)); }
-  #nearest .dist { display: block; font-size: 14px; color: var(--sea); margin-bottom: 2px; }
+  #nearest .dist {
+    display: block; font-size: 14px; color: var(--sea);
+    font-variant-numeric: tabular-nums; margin-bottom: 2px;
+  }
   #nearest .name { display: block; font-size: 19px; font-weight: 600; }
 
-  #sheet { position: fixed; inset: 0; z-index: 30; display: none; flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.55); pointer-events: auto; }
+  #sheet {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.55);
+  }
   #sheet.on { display: flex; }
-  #sheetInner { background: var(--bone); color: var(--ink); padding: 26px var(--pad) calc(26px + env(safe-area-inset-bottom)); max-height: 78%; overflow-y: auto; }
+  #sheetInner {
+    background: var(--bone); color: var(--ink);
+    padding: 26px var(--pad) calc(26px + env(safe-area-inset-bottom));
+    max-height: 78%; overflow-y: auto;
+  }
   #sheetInner h2 { margin: 0 0 3px; font-size: 25px; font-weight: 600; }
   #sheetInner .sub { margin: 0 0 18px; color: var(--sea); font-size: 15px; }
   #sheetInner .body { margin: 0 0 22px; max-width: 62ch; }
   #closeBtn { padding: 14px 22px; background: var(--ink); color: var(--bone); font-size: 16px; }
-
-  /* UPLOAD PAGE CSS */
-  #uploadPage { position: fixed; inset: 0; z-index: 100; background: var(--ink); display: flex; flex-direction: column; }
-  #uploadPage.hidden { display: none !important; }
-  .upload-header { display: flex; justify-content: space-between; align-items: center; padding: var(--pad) var(--pad) 0; }
-  .upload-header h2 { margin: 0; color: var(--chalk); font-size: 22px; }
-  #closeUploadBtn { background: transparent; color: var(--bone); font-size: 24px; padding: 5px 10px; }
-  
-  .upload-body { flex: 1; padding: var(--pad); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
-  #mediaInput { color: var(--bone); width: 100%; }
-  
-  .editor-section { background: rgba(242,237,228,0.1); padding: 15px; border-radius: 8px; }
-  .editor-section.hidden { display: none; }
-  .hint { font-size: 14px; color: #8FC0C4; margin: 0 0 10px 0; }
-  
-  #imageCanvas { max-width: 100%; border: 1px solid var(--sea); touch-action: none; border-radius: 4px; }
-  video, audio { max-width: 100%; width: 100%; border-radius: 4px; }
-  
-  .trim-controls { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
-  .trim-controls label { display: flex; flex-direction: column; font-size: 14px; color: var(--bone); }
-  input[type=range] { width: 100%; margin-top: 5px; }
-
-  .action-btn { background: var(--sea); color: var(--bone); padding: 10px; margin-top: 10px; width: 100%; border-radius: 4px; }
-  .upload-footer { padding: var(--pad); padding-bottom: calc(var(--pad) + env(safe-area-inset-bottom)); }
-  #submitMediaBtn { width: 100%; padding: 15px; background: var(--chalk); color: var(--ink); font-size: 18px; font-weight: 600; border-radius: 8px; }
-  #submitMediaBtn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .note {
+    display: inline-block; margin-bottom: 16px; padding: 5px 9px;
+    background: rgba(78,140,147,.16); color: var(--sea); font-size: 13px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #drawer, #nearest { transition: none !important; }
+  }
 </style>
 </head>
 <body>
 
-<!-- GATE (Start Screen) -->
 <div id="gate" role="region" aria-label="Οθόνη καλωσορίσματος">
   <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule" aria-hidden="true"></div>
+  <p>10 Σημεία με δυναμική ομαδοποίηση (Clusters).</p>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn" type="button">Ξεκίνα τη διαδρομή</button>
 </div>
 
-<!-- HUD -->
 <div id="hud" aria-hidden="true">
   <div id="status" role="status" aria-live="polite">Αναμονή για στίγμα…</div>
-  <button id="openUploadBtn" type="button">📷 Ανέβασμα</button>
-  <button id="nearest" type="button">
+  <button id="nearest" type="button" aria-label="Πλησιέστερο σημείο ενδιαφέροντος">
     <span class="dist" aria-hidden="true"></span><span class="name" aria-hidden="true"></span>
   </button>
 </div>
 
-<!-- DRAWER (Map) -->
 <div id="drawer" role="region" aria-label="Περιοχή Χάρτη">
-  <button id="handle" type="button" aria-expanded="false">
-    <span class="grip" aria-hidden="true"></span><span class="lbl">Χάρτης</span><span class="hint" aria-hidden="true">σύρε πάνω</span>
+  <button id="handle" type="button" aria-expanded="false" aria-controls="map">
+    <span class="grip" aria-hidden="true"></span>
+    <span class="lbl">Χάρτης</span>
+    <span class="hint" aria-hidden="true">σύρε πάνω</span>
   </button>
-  <div id="map" aria-label="Χάρτης διαδρομής">
+  <div id="map" aria-label="Χάρτης διαδρομής" role="application">
     <div id="compass" aria-hidden="true"><span class="needle"></span><span class="deg">—</span></div>
   </div>
 </div>
 
-<!-- STORY SHEET -->
-<div id="sheet" role="dialog" aria-hidden="true">
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true">
   <div id="sheetInner" tabindex="-1">
+    <span class="note">Δοκιμαστικό κείμενο, όχι μαρτυρία</span>
     <h2 id="sheetTitle"></h2>
     <p class="sub"></p>
     <p class="body"></p>
@@ -177,377 +236,509 @@
   </div>
 </div>
 
-<!-- MEDIA UPLOAD & EDITOR PAGE -->
-<div id="uploadPage" class="hidden" role="dialog" aria-modal="true">
-  <div class="upload-header">
-    <h2>Προσθήκη Υλικού</h2>
-    <button id="closeUploadBtn" type="button" aria-label="Κλείσιμο">✕</button>
-  </div>
-  
-  <div class="upload-body">
-    <input type="file" id="mediaInput" accept="image/*,video/*,audio/*" />
-    
-    <!-- Image Blur Editor -->
-    <div id="imageEditor" class="hidden editor-section">
-      <p class="hint">Σύρε το δάχτυλό σου στην εικόνα για να θολώσεις πρόσωπα/στοιχεία.</p>
-      <canvas id="imageCanvas"></canvas>
-      <button id="clearBlurBtn" type="button" class="action-btn">Καθαρισμός Θολώματος</button>
-    </div>
-
-    <!-- Video / Audio Trimmer -->
-    <div id="mediaEditor" class="hidden editor-section">
-      <p class="hint">Επίλεξε το σημείο έναρξης και λήξης (redact / trim).</p>
-      <div id="mediaPreviewContainer"></div>
-      
-      <div class="trim-controls">
-        <label>Έναρξη: <span id="startTimeVal">0.0</span>s
-          <input type="range" id="startTime" min="0" value="0" step="0.1">
-        </label>
-        <label>Λήξη: <span id="endTimeVal">0.0</span>s
-          <input type="range" id="endTime" min="0" value="0" step="0.1">
-        </label>
-      </div>
-    </div>
-  </div>
-
-  <div class="upload-footer">
-    <button id="submitMediaBtn" type="button" disabled>Ανέβασμα Αρχείου</button>
-  </div>
-</div>
-
 <script>
 (function () {
   'use strict';
 
-  // --- AR & MAP DATA ---
   var STORIES = [
-    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης, σημείο αναφοράς.' },
-    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης στο λιμάνι.' },
-    { id: 'mitropoli', title: 'Μητρόπολη', subtitle: 'Άγιος Αθανάσιος', lat: 39.108346, lon: 26.557850, radius: 30, text: 'Ο Μητροπολιτικός Ναός, κρυμμένος στα στενά.' },
-    { id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Οδός Ερμού (Βόρεια)', lat: 39.110373, lon: 26.557807, radius: 30, text: 'Το παλιό οθωμανικό τέμενος της αγοράς.' },
-    { id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα', lat: 39.11180, lon: 26.55660, radius: 40, text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.' },
-    { id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού', lat: 39.110015, lon: 26.558099, radius: 40, text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.' }
+    {
+      id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
+      lat: 39.105132, lon: 26.554781, radius: 35, 
+      text: 'Η μεγαλύτερη εκκλησία της πόλης, σημείο αναφοράς.'
+    },
+    {
+      id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή',
+      lat: 39.106641, lon: 26.557426, radius: 40,
+      text: 'Η κεντρική πλατεία της Μυτιλήνης στο λιμάνι.' 
+    },
+    {
+      id: 'mitropoli', title: 'Μητρόπολη', subtitle: 'Άγιος Αθανάσιος',
+      lat: 39.108346, lon: 26.557850, radius: 30, 
+      text: 'Ο Μητροπολιτικός Ναός, κρυμμένος στα στενά.'
+    },
+    {
+      id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Οδός Ερμού (Βόρεια)',
+      lat: 39.110373, lon: 26.557807, radius: 30, 
+      text: 'Το παλιό οθωμανικό τέμενος της αγοράς.'
+    },
+    {
+      id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα',
+      lat: 39.11180, lon: 26.55660, radius: 40,
+      text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.'
+    },
+    {
+      id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού',
+      lat: 39.110015, lon: 26.558099, radius: 40,  
+      text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.'
+    }
   ];
 
+  var params = new URLSearchParams(location.search);
+  var SMOOTHING = parseFloat(params.get('k')) || 0.1;
+  var MIN_DIST  = parseFloat(params.get('d')) || 2; 
+  var Y_OFF = params.has('y') ? parseFloat(params.get('y')) : 1.2;
+
+  var AR_CLUSTERS = [];
+  var CLUSTER_RADIUS_M = 50; 
+  var CLUSTER_REVEAL_M = 80; 
+
   var $ = function (id) { return document.getElementById(id); };
-  var me = null, map = null, meMarker = null, accCircle = null, followMe = true;
+  var me = null, lastFocus = null;
   window.currentHeading = null;
 
   function distanceMetres(lat1, lon1, lat2, lon2) {
     var R = 6371000, rad = function (d) { return d * Math.PI / 180; };
-    var a = Math.sin(rad(lat2 - lat1)/2) * Math.sin(rad(lat2 - lat1)/2) +
-            Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1)/2) * Math.sin(rad(lon2 - lon1)/2);
+    var dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(rad(lat1)) * Math.cos(rad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
+  
+  function fmt(m) {
+    return m < 1000 ? Math.round(m) + ' μέτρα' : (m / 1000).toFixed(1) + ' χιλιόμετρα';
+  }
 
-  // --- UI CONTROLS ---
-  function initDrawer() {
-    var hd = $('handle');
-    var startY = null, moved = false;
-    hd.addEventListener('click', function () {
-      if (moved) return;
-      var open = !$('drawer').classList.contains('open');
-      $('drawer').classList.toggle('open', open);
-      hd.setAttribute('aria-expanded', open ? 'true' : 'false');
-      hd.querySelector('.hint').textContent = open ? 'σύρε κάτω' : 'σύρε πάνω';
-      if (map) setTimeout(function () { map.invalidateSize(); }, 300);
+  var _camPos = new THREE.Vector3();
+  AFRAME.registerComponent('billboard', {
+    tick: function () {
+      var cam = this.el.sceneEl && this.el.sceneEl.camera;
+      if (!cam) { return; }
+      cam.getWorldPosition(_camPos);
+      var o = this.el.object3D;
+      o.lookAt(_camPos.x, o.position.y, _camPos.z);
+    }
+  });
+
+  var _cameraDir = new THREE.Vector3();
+  AFRAME.registerComponent('hud-compass', {
+    tick: function () {
+      var cam = this.el.sceneEl && this.el.sceneEl.camera;
+      if (!cam) return;
+      
+      cam.getWorldDirection(_cameraDir);
+      var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
+      if (h < 0) h += 360;
+      window.currentHeading = h;
+
+      if (this.displayHeading === undefined) this.displayHeading = h;
+      
+      var diff = h - (this.displayHeading % 360);
+      if (diff > 180) diff -= 360;
+      else if (diff < -180) diff += 360;
+      this.displayHeading += diff;
+
+      if (!this.needle) {
+        this.needle = document.querySelector('#compass .needle');
+        this.degOut = document.querySelector('#compass .deg');
+      }
+      if (this.needle) {
+        this.needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
+        this.degOut.textContent = Math.round(h) + '°';
+      }
+      applyHeadingToDot();
+    }
+  });
+
+  function makeLabelImage(story) {
+    var W = 900, H = 300, dpr = 2;
+    var c = document.createElement('canvas');
+    c.width = W * dpr; c.height = H * dpr;
+    var g = c.getContext('2d');
+    g.scale(dpr, dpr);
+
+    g.fillStyle = 'rgba(14,42,46,0.90)';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#F0C244'; 
+    g.fillRect(0, 0, 14, H);
+
+    g.fillStyle = '#F2EDE4';
+    g.font = '600 82px -apple-system, sans-serif';
+    g.textBaseline = 'middle';
+    g.fillText(story.title, 52, H / 2 - 26);
+
+    g.fillStyle = '#8FC0C4';
+    g.font = '46px -apple-system, sans-serif';
+    g.fillText(story.subtitle, 52, H / 2 + 50);
+
+    var img = document.createElement('img');
+    img.id = 'lbl-' + story.id;
+    img.className = 'labelsrc';
+    img.src = c.toDataURL('image/png');
+    document.body.appendChild(img);
+    return img.id;
+  }
+
+  function makeClusterImage(count) {
+    var W = 900, H = 300, dpr = 2;
+    var c = document.createElement('canvas');
+    c.width = W * dpr; c.height = H * dpr;
+    var g = c.getContext('2d');
+    g.scale(dpr, dpr);
+
+    g.fillStyle = 'rgba(14,42,46,0.95)';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#4E8C93'; 
+    g.fillRect(0, 0, 20, H);
+
+    g.fillStyle = '#F2EDE4';
+    g.font = '600 82px -apple-system, sans-serif';
+    g.textBaseline = 'middle';
+    g.fillText(count + ' Σημεία κοντά', 62, H / 2 - 26);
+
+    g.fillStyle = '#8FC0C4';
+    g.font = '46px -apple-system, sans-serif';
+    g.fillText('Πλησίασε για να τα δεις', 62, H / 2 + 50);
+
+    var img = document.createElement('img');
+    img.id = 'lbl-cluster-' + Math.floor(Math.random() * 10000);
+    img.className = 'labelsrc';
+    img.src = c.toDataURL('image/png');
+    document.body.appendChild(img);
+    return img.id;
+  }
+
+  function prepareARClusters() {
+    var assigned = {};
+    STORIES.forEach(function(s, i) {
+      if (assigned[i]) return;
+      var c = { id: 'ar-cluster-' + i, stories: [s], lat: s.lat, lon: s.lon };
+      assigned[i] = true;
+      
+      STORIES.forEach(function(s2, j) {
+        if (i === j || assigned[j]) return;
+        if (distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
+          c.stories.push(s2);
+          assigned[j] = true;
+        }
+      });
+      
+      if (c.stories.length > 1) {
+        var sumLat = 0, sumLon = 0;
+        c.stories.forEach(function(cs) { sumLat += cs.lat; sumLon += cs.lon; });
+        c.lat = sumLat / c.stories.length;
+        c.lon = sumLon / c.stories.length;
+        AR_CLUSTERS.push(c);
+      }
     });
   }
 
-  $('closeBtn').addEventListener('click', function() {
-    $('sheet').classList.remove('on');
-    $('sheet').setAttribute('aria-hidden', 'true');
-  });
+  function buildScene() {
+    prepareARClusters();
+    var parts = [];
 
-  // --- MAP INIT ---
+    AR_CLUSTERS.forEach(function(c) {
+      var imgId = makeClusterImage(c.stories.length);
+      parts.push(
+        '<a-entity id="' + c.id + '" class="ar-cluster" ' +
+        'gps-new-entity-place="latitude: ' + c.lat + '; longitude: ' + c.lon + '" ' +
+        'billboard scale="5 5 1">' +
+          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" ' +
+          'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
+          '</a-plane>' +
+        '</a-entity>'
+      );
+    });
+
+    STORIES.forEach(function (s) {
+      var imgId = makeLabelImage(s);
+      parts.push(
+        '<a-entity class="poi" data-id="' + s.id + '" ' +
+        'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
+        'billboard scale="5 5 1">' +
+          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" ' +
+          'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
+          '</a-plane>' +
+        '</a-entity>'
+      );
+    });
+
+    parts.push(
+      '<a-camera id="cam" ' +
+      'look-controls-enabled="false" ' +
+      'arjs-device-orientation-controls="smoothingFactor: ' + SMOOTHING + '" ' +
+      'gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"></a-camera>'
+    );
+
+    var scene = document.createElement('a-scene');
+    scene.setAttribute('hud-compass', '');
+    scene.setAttribute('vr-mode-ui', 'enabled: false');
+    scene.setAttribute('loading-screen', 'enabled: false');
+    scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
+    scene.setAttribute('renderer', 'antialias: true; alpha: true');
+    scene.innerHTML = parts.join('');
+    document.body.appendChild(scene);
+  }
+
+  function updateARLabels() {
+    if (!me) return;
+
+    AR_CLUSTERS.forEach(function(c) {
+      var el = document.getElementById(c.id);
+      if (!el) return;
+      var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
+      
+      if (d < CLUSTER_REVEAL_M) {
+        el.setAttribute('visible', 'false');
+      } else {
+        el.setAttribute('visible', 'true');
+        var k = Math.max(d, 25) * 0.09;
+        el.setAttribute('scale', k + ' ' + k + ' 1');
+      }
+    });
+
+    STORIES.forEach(function (s) {
+      var el = document.querySelector('.poi[data-id="' + s.id + '"]');
+      if (!el) return;
+
+      var parentCluster = AR_CLUSTERS.find(function(c) { return c.stories.includes(s); });
+      
+      if (parentCluster) {
+        var clusterDist = distanceMetres(me.lat, me.lon, parentCluster.lat, parentCluster.lon);
+        if (clusterDist >= CLUSTER_REVEAL_M) {
+          el.setAttribute('visible', 'false');
+          return;
+        }
+      }
+      
+      el.setAttribute('visible', 'true');
+      var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
+      var k = Math.max(d, 25) * 0.09;
+      el.setAttribute('scale', k + ' ' + k + ' 1');
+    });
+  }
+
+  var map = null, meMarker = null, accCircle = null, followMe = true;
+
   function initMap() {
-    map = L.map('map', { zoomControl: true, attributionControl: false }).setView([STORIES[0].lat, STORIES[0].lon], 16);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    var markers = L.markerClusterGroup({ maxClusterRadius: 40 });
+    map = L.map('map', {
+      zoomControl: true, attributionControl: true
+    }).setView([STORIES[0].lat, STORIES[0].lon], 16);
+
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    var markers = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      iconCreateFunction: function(cluster) {
+        return L.divIcon({
+          html: cluster.getChildCount(),
+          className: 'map-cluster-dot',
+          iconSize: [32, 32]
+        });
+      }
+    });
+
     STORIES.forEach(function (s) {
       var m = L.marker([s.lat, s.lon], {
-        icon: L.divIcon({ className: '', html: '<div class="poi-dot"></div>', iconSize: [13, 13], iconAnchor: [6, 6] })
-      }).on('click', function () {
-        $('sheetTitle').textContent = s.title;
-        $('sheet').querySelector('.sub').textContent = s.subtitle;
-        $('sheet').querySelector('.body').textContent = s.text;
-        $('sheet').classList.add('on');
-      });
+        icon: L.divIcon({
+          className: '', html: '<div class="poi-dot" aria-hidden="true"></div>',
+          iconSize: [13, 13], iconAnchor: [6, 6]
+        }),
+        title: s.title,
+        alt: s.title
+      }).on('click', function () { openStory(s); });
       markers.addLayer(m);
     });
+
     map.addLayer(markers);
     map.on('dragstart', function () { followMe = false; });
   }
 
   function updateMap() {
-    if (!map || !me) return;
+    if (!map || !me) { return; }
     var ll = [me.lat, me.lon];
+
     if (!meMarker) {
-      meMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me-wrap"><div class="me-rot unknown"><div class="me-cone"></div><div class="me-dot"></div></div></div>', iconSize: [56, 56], iconAnchor: [28, 28] }) }).addTo(map);
-      accCircle = L.circle(ll, { radius: me.accuracy || 0, color: '#F0C244', weight: 1, fillColor: '#F0C244', fillOpacity: 0.10 }).addTo(map);
+      meMarker = L.marker(ll, {
+        icon: L.divIcon({
+          className: '',
+          html: '<div class="me-wrap"><div class="me-rot unknown">' +
+                '<div class="me-cone"></div><div class="me-dot"></div>' +
+                '</div></div>',
+          iconSize: [56, 56], iconAnchor: [28, 28]
+        }),
+        title: 'Η θέση σου', alt: 'Η θέση σου', zIndexOffset: 1000
+      }).addTo(map);
+      accCircle = L.circle(ll, {
+        radius: me.accuracy || 0, color: '#F0C244', weight: 1,
+        fillColor: '#F0C244', fillOpacity: 0.10
+      }).addTo(map);
     } else {
-      meMarker.setLatLng(ll); accCircle.setLatLng(ll).setRadius(me.accuracy || 0);
+      meMarker.setLatLng(ll);
+      accCircle.setLatLng(ll).setRadius(me.accuracy || 0);
     }
-    if (followMe) map.setView(ll, map.getZoom(), { animate: false });
+    if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
   }
 
-  // --- START APP ---
-  $('startBtn').addEventListener('click', function () {
-    $('gate').style.display = 'none';
-    $('hud').classList.add('on');
-    initMap();
-    initDrawer();
-
-    if (navigator.geolocation) {
-      navigator.geolocation.watchPosition(
-        function (pos) { me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }; updateMap(); },
-        function (err) { $('status').textContent = 'Σφάλμα τοποθεσίας: ' + err.message; },
-        { enableHighAccuracy: true }
-      );
-    }
-  });
-
-
-  // ==========================================
-  // MEDIA UPLOAD & EDITOR LOGIC
-  // ==========================================
-
-  var uploadPage = $('uploadPage');
-  var mediaInput = $('mediaInput');
-  var submitMediaBtn = $('submitMediaBtn');
-  var imageEditor = $('imageEditor');
-  var mediaEditor = $('mediaEditor');
-  var imageCanvas = $('imageCanvas');
-  var ctx = imageCanvas.getContext('2d');
-  
-  var mediaPreviewContainer = $('mediaPreviewContainer');
-  var startTimeInput = $('startTime');
-  var endTimeInput = $('endTime');
-  var startTimeVal = $('startTimeVal');
-  var endTimeVal = $('endTimeVal');
-  
-  var currentImage = null;
-  var currentFile = null;
-  
-  // FFmpeg Setup
-  let ffmpeg = null;
-  let ffmpegLoaded = false;
-  
-  async function loadFFmpeg() {
-    if (ffmpegLoaded) return;
-    try {
-      const { FFmpeg } = FFmpegWASM;
-      ffmpeg = new FFmpeg();
-      ffmpeg.on('log', ({ message }) => console.log(message));
-      await ffmpeg.load({
-        coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-        wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
-      });
-      ffmpegLoaded = true;
-    } catch (err) {
-      console.error("FFmpeg error:", err);
-      alert("Αποτυχία φόρτωσης FFmpeg. Βεβαιωθείτε ότι ο server σας στέλνει τα headers COOP και COEP (Cross-Origin-Opener-Policy & Cross-Origin-Embedder-Policy).");
-    }
-  }
-
-  $('openUploadBtn').addEventListener('click', function() {
-    uploadPage.classList.remove('hidden');
-    loadFFmpeg(); // Προφόρτωση του FFmpeg όταν ανοίγει το Modal
-  });
-
-  $('closeUploadBtn').addEventListener('click', function() {
-    uploadPage.classList.add('hidden');
-  });
-
-  mediaInput.addEventListener('change', function(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    currentFile = file;
-
-    imageEditor.classList.add('hidden');
-    mediaEditor.classList.add('hidden');
-    submitMediaBtn.disabled = false;
-    submitMediaBtn.textContent = 'Επεξεργασία & Ανέβασμα';
-    mediaPreviewContainer.innerHTML = '';
-
-    var fileURL = URL.createObjectURL(file);
-
-    if (file.type.startsWith('image/')) {
-      imageEditor.classList.remove('hidden');
-      setupImageEditor(fileURL);
-    } else if (file.type.startsWith('video/') || file.type.startsWith('audio/')) {
-      mediaEditor.classList.remove('hidden');
-      setupMediaEditor(fileURL, file.type);
-    }
-  });
-
-  // --- IMAGE BLUR (CANVAS) ---
-  var isDrawing = false, startX, startY;
-
-  function setupImageEditor(src) {
-    var img = new Image();
-    img.onload = function() {
-      currentImage = img;
-      var maxWidth = uploadPage.clientWidth - 32;
-      var scale = maxWidth / img.width;
-      if (scale > 1) scale = 1;
-      
-      imageCanvas.width = img.width * scale;
-      imageCanvas.height = img.height * scale;
-      ctx.scale(scale, scale);
-      ctx.drawImage(img, 0, 0);
-    };
-    img.src = src;
-  }
-
-  function getMousePos(evt) {
-    var rect = imageCanvas.getBoundingClientRect();
-    var scaleX = imageCanvas.width / rect.width;
-    var scaleY = imageCanvas.height / rect.height;
-    var clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-    var clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-    return {
-      x: (clientX - rect.left) * scaleX / (imageCanvas.width / currentImage.width),
-      y: (clientY - rect.top) * scaleY / (imageCanvas.height / currentImage.height)
-    };
-  }
-
-  function startBlur(e) {
-    if (!currentImage) return;
-    isDrawing = true;
-    var pos = getMousePos(e);
-    startX = pos.x; startY = pos.y;
-  }
-
-  function applyBlur(e) {
-    if (!isDrawing) return;
-    e.preventDefault();
-    var pos = getMousePos(e);
-    var w = pos.x - startX;
-    var h = pos.y - startY;
+  var cachedRot = null;
+  var displayMapHeading = 0;
+  function applyHeadingToDot() {
+    if (!meMarker || window.currentHeading === null) return;
     
-    ctx.clearRect(0, 0, currentImage.width, currentImage.height);
-    ctx.drawImage(currentImage, 0, 0);
-    ctx.filter = 'blur(15px)';
-    ctx.drawImage(currentImage, startX, startY, w, h, startX, startY, w, h);
-    ctx.filter = 'none';
+    if (!cachedRot) {
+      var elm = meMarker.getElement();
+      if (elm) cachedRot = elm.querySelector('.me-rot');
+    }
+    if (!cachedRot) return;
+
+    cachedRot.classList.remove('unknown');
+    
+    var diff = window.currentHeading - (displayMapHeading % 360);
+    if (diff > 180) diff -= 360;
+    else if (diff < -180) diff += 360;
+    displayMapHeading += diff;
+
+    cachedRot.style.transform = 'rotate(' + displayMapHeading + 'deg)';
   }
 
-  function endBlur() {
-    if (!isDrawing) return;
-    isDrawing = false;
-    var tempImg = new Image();
-    tempImg.onload = function() { currentImage = tempImg; };
-    tempImg.src = imageCanvas.toDataURL();
+  function setDrawer(open) {
+    var d = $('drawer'), hd = $('handle');
+    d.classList.toggle('open', open);
+    document.body.classList.toggle('drawer-open', open);
+    hd.setAttribute('aria-expanded', open ? 'true' : 'false');
+    hd.querySelector('.hint').textContent = open ? 'σύρε κάτω' : 'σύρε πάνω';
+    if (map) {
+      map.invalidateSize();
+      setTimeout(function () { map.invalidateSize(); if (open) { updateMap(); } }, 300);
+    }
   }
 
-  imageCanvas.addEventListener('mousedown', startBlur);
-  imageCanvas.addEventListener('mousemove', applyBlur);
-  imageCanvas.addEventListener('mouseup', endBlur);
-  imageCanvas.addEventListener('touchstart', startBlur, {passive: false});
-  imageCanvas.addEventListener('touchmove', applyBlur, {passive: false});
-  imageCanvas.addEventListener('touchend', endBlur);
+  function initDrawer() {
+    var hd = $('handle');
+    var startY = null, moved = false;
+    hd.addEventListener('click', function () {
+      if (moved) { moved = false; return; }
+      setDrawer(!$('drawer').classList.contains('open'));
+    });
+    hd.addEventListener('pointerdown', function (e) {
+      startY = e.clientY; moved = false;
+      hd.setPointerCapture(e.pointerId);
+    });
+    hd.addEventListener('pointermove', function (e) {
+      if (startY === null) { return; }
+      if (Math.abs(e.clientY - startY) > 12) { moved = true; }
+    });
+    hd.addEventListener('pointerup', function (e) {
+      if (startY === null) { return; }
+      var dy = e.clientY - startY;
+      if (Math.abs(dy) > 24) { setDrawer(dy < 0); }
+      startY = null;
+    });
+  }
 
-  $('clearBlurBtn').addEventListener('click', function() {
-    if (currentFile) setupImageEditor(URL.createObjectURL(currentFile));
-  });
-
-  // --- VIDEO / AUDIO TRIMMER ---
-  let activeMediaElement = null;
-  function setupMediaEditor(src, type) {
-    var el = document.createElement(type.startsWith('video/') ? 'video' : 'audio');
-    el.src = src;
-    el.controls = true;
-    activeMediaElement = el;
-    mediaPreviewContainer.appendChild(el);
-
-    el.onloadedmetadata = function() {
-      var duration = el.duration;
-      startTimeInput.max = duration; endTimeInput.max = duration;
-      startTimeInput.value = 0; endTimeInput.value = duration;
-      startTimeVal.textContent = "0.0"; endTimeVal.textContent = duration.toFixed(1);
+  function onPosition(pos) {
+    me = {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      accuracy: pos.coords.accuracy
     };
+    
+    updateARLabels();
+    updateMap();
 
-    startTimeInput.addEventListener('input', function() {
-      if (parseFloat(startTimeInput.value) > parseFloat(endTimeInput.value)) {
-        endTimeInput.value = startTimeInput.value;
-      }
-      startTimeVal.textContent = parseFloat(startTimeInput.value).toFixed(1);
-      el.currentTime = startTimeInput.value;
-    });
+    var dbg = params.has('debug') ? '    Σημεία: ' + STORIES.length : '';
+    $('statusлогу') // safety
+    $('status').textContent =
+      'Ακρίβεια στίγματος συν πλην ' + Math.round(me.accuracy) + ' μέτρα. ' +
+      'Πυξίδα ' + (window.currentHeading === null ? 'χωρίς σήμα' : Math.round(window.currentHeading) + ' μοίρες') + dbg;
 
-    endTimeInput.addEventListener('input', function() {
-      if (parseFloat(endTimeInput.value) < parseFloat(startTimeInput.value)) {
-        startTimeInput.value = endTimeInput.value;
-      }
-      endTimeVal.textContent = parseFloat(endTimeInput.value).toFixed(1);
-      el.currentTime = endTimeInput.value;
-    });
+    var ranked = STORIES.map(function (s) {
+      return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
+    }).sort(function (a, b) { return a.d - b.d; });
+
+    var c = ranked[0], btn = $('nearest');
+    var distText = c.d <= c.s.radius ? 'Είσαι εδώ' : fmt(c.d) + ' μακριά';
+    
+    btn.querySelector('.dist').textContent = distText;
+    btn.querySelector('.name').textContent = c.s.title;
+    // Update accessibility label explicitly for screen readers
+    btn.setAttribute('aria-label', 'Πλησιέστερο σημείο: ' + c.s.title + ', ' + distText);
+    
+    btn.classList.add('on');
+    btn.onclick = function () { openStory(c.s); };
   }
 
-  // --- PROCESS AND SUBMIT ---
-  submitMediaBtn.addEventListener('click', async function() {
-    if (!currentFile) return;
+  function openStory(s) {
+    lastFocus = document.activeElement;
+    $('sheetTitle').textContent = s.title;
+    $('sheet').querySelector('.sub').textContent = s.subtitle;
+    $('sheet').querySelector('.body').textContent = s.text;
+    
+    var sheet = $('sheet');
+    sheet.classList.add('on');
+    sheet.setAttribute('aria-hidden', 'false');
+    
+    // Focus management for Screen Readers
+    setTimeout(function() {
+      $('sheetInner').focus();
+    }, 100);
+  }
+  
+  function closeStorySheet() {
+    var sheet = $('sheet');
+    sheet.classList.remove('on');
+    sheet.setAttribute('aria-hidden', 'true');
+    if (lastFocus) {
+      lastFocus.focus();
+    }
+  }
 
-    if (currentFile.type.startsWith('image/')) {
-      // Για εικόνες, απλά εξάγουμε το canvas
-      var finalImageData = imageCanvas.toDataURL('image/jpeg');
-      alert("Επιτυχία! Το Blob της εικόνας δημιουργήθηκε και είναι έτοιμο για upload στο backend.");
-      uploadPage.classList.add('hidden');
-    } 
-    else {
-      // Για βίντεο / ήχο τρέχουμε το FFmpeg.wasm
-      if (!ffmpegLoaded) {
-        alert("Το FFmpeg δεν έχει φορτώσει. Ελέγξτε αν ο server χρησιμοποιεί COOP/COEP headers.");
+  $('closeBtn').addEventListener('click', closeStorySheet);
+
+  $('startBtn').addEventListener('click', function () {
+    var btn = $('startBtn');
+    btn.disabled = true;
+    btn.textContent = 'Άνοιγμα κάμερας…';
+
+    var perm = (window.DeviceOrientationEvent &&
+                typeof DeviceOrientationEvent.requestPermission === 'function')
+      ? DeviceOrientationEvent.requestPermission()
+      : Promise.resolve('granted');
+
+    perm.then(function (state) {
+      if (state !== 'granted') {
+        throw new Error('Δεν δόθηκε άδεια για τους αισθητήρες κίνησης.');
+      }
+      buildScene();
+      $('gate').style.display = 'none';
+      $('hud').classList.add('on');
+      $('hud').removeAttribute('aria-hidden');
+      initMap();
+      initDrawer();
+
+      if (!navigator.geolocation) {
+        $('status').textContent = 'Η συσκευή δεν δίνει τοποθεσία.';
         return;
       }
       
-      submitMediaBtn.disabled = true;
-      submitMediaBtn.textContent = 'Επεξεργασία (Trimming)...';
+      navigator.geolocation.watchPosition(
+        onPosition,
+        function (err) {
+          $('status').textContent =
+            'Δεν βρέθηκε στίγμα (κωδικός ' + err.code + '). Βγες σε ανοιχτό χώρο.';
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 } 
+      );
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = 'Δοκίμασε ξανά';
+      $('gate').querySelector('p').textContent =
+        'Δεν ξεκίνησε: ' + (e.message || e) +
+        ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια.';
+    });
+  });
 
-      try {
-        const { fetchFile } = FFmpegUtil;
-        const ext = currentFile.name.split('.').pop() || 'mp4';
-        const inputName = 'input.' + ext;
-        const outputName = 'output.' + ext;
-
-        await ffmpeg.writeFile(inputName, await fetchFile(currentFile));
-
-        const start = startTimeInput.value;
-        const end = endTimeInput.value;
-        const duration = (parseFloat(end) - parseFloat(start)).toString();
-
-        await ffmpeg.exec([
-          '-i', inputName,
-          '-ss', start,
-          '-t', duration,
-          '-c', 'copy',
-          outputName
-        ]);
-
-        const data = await ffmpeg.readFile(outputName);
-        const processedBlob = new Blob([data.buffer], { type: currentFile.type });
-        const processedUrl = URL.createObjectURL(processedBlob);
-        
-        // Καθαρισμός μνήμης ffmpeg
-        await ffmpeg.deleteFile(inputName);
-        await ffmpeg.deleteFile(outputName);
-
-        // Προβολή αποτελέσματος
-        alert("Το βίντεο κόπηκε με επιτυχία στον Browser! (Έτοιμο για αποστολή στο backend)");
-        
-        // Δυνατότητα ελέγχου από τον χρήστη (κατέβασμα δοκιμαστικά)
-        const a = document.createElement('a');
-        a.href = processedUrl;
-        a.download = 'trimmed_' + currentFile.name;
-        a.click();
-        
-        uploadPage.classList.add('hidden');
-      } catch (err) {
-        console.error(err);
-        alert("Σφάλμα κατά την επεξεργασία: " + err.message);
-        submitMediaBtn.disabled = false;
-        submitMediaBtn.textContent = 'Δοκιμάστε ξανά';
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      var camEl = document.getElementById('cam');
+      if (camEl) {
+        camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: 1');
+        setTimeout(function () {
+          camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: ' + SMOOTHING);
+        }, 1000);
       }
     }
   });
