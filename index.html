@@ -135,7 +135,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>11Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -364,13 +364,18 @@
   function buildScene() {
     prepareARClusters();
     var parts = [];
+    
+    // Έλεγχος iOS για αυτόματη περιστροφή 180 μοιρών στα AR entities
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var iosRot = isIOS ? ' rotation="0 180 0"' : '';
+
     AR_CLUSTERS.forEach(c => {
       var imgId = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', true);
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"${iosRot}><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
     STORIES.forEach(s => {
       var imgId = makeLabelImage(s.title, s.subtitle, false);
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"${iosRot}><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
     parts.push(`<a-camera id="cam" look-controls-enabled="false" arjs-device-orientation-controls="smoothingFactor: ${SMOOTHING}" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
 
