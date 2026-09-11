@@ -93,7 +93,7 @@
   .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
 
   .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; }
-  #imageCanvas { width: 100%; display: block; }
+  #imageCanvas { width: 100%; display: block; touch-action: none; }
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
   
@@ -210,7 +210,6 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
-  // ΕΠΑΝΕΦΕΡΑΜΕ ΟΛΑ ΤΑ ΑΡΧΙΚΑ ΣΗΜΕΙΑ (STORIES)
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης, σημείο αναφοράς.' },
     { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης στο λιμάνι.' },
@@ -406,7 +405,7 @@
   });
 
   // ==========================================
-  // 2. FAST LOCAL EDITOR
+  // 2. FAST LOCAL EDITOR (ΔΙΟΡΘΩΜΕΝΟ BLUR & AUDIO MUTE)
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
@@ -477,6 +476,7 @@
     }
   };
 
+  // ΔΙΟΡΘΩΜΕΝΟ BLUR (Ακολουθεί ομαλά το σύρσιμο)
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -486,14 +486,21 @@
     ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); 
     ctx.filter = 'blur(15px)'; ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height); ctx.restore(); 
   }
+  
   canvas.onpointerdown = e => { 
     isDrawing = true; 
     imageHistory.push(canvas.toDataURL());
     drawBlur(getMousePos(e)); 
     canvas.setPointerCapture(e.pointerId); 
   };
-  canvas.onpointermove = e => { if(isDrawing) drawBlur(getMousePos(e)); };
-  canvas.onpointerup = () => isDrawing = false;
+  canvas.onpointermove = e => { 
+    if (!isDrawing) return; 
+    drawBlur(getMousePos(e)); 
+  };
+  canvas.onpointerup = e => { 
+    isDrawing = false; 
+    try { canvas.releasePointerCapture(e.pointerId); } catch(err){}
+  };
   
   $('undoBlurBtn').onclick = () => {
     if (imageHistory.length > 0) {
@@ -510,6 +517,7 @@
     $('uploadSheet').classList.add('on');
   };
 
+  // ΔΙΟΡΘΩΜΕΝΗ ΑΠΟΘΗΚΕΥΣΗ (Διαβάζει κανονικά τα Mute ranges του ήχου)
   $('saveFileBtn').onclick = async function() {
     try {
       if (currentFile.type.startsWith('image/')) {
@@ -527,7 +535,12 @@
         processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile, blurRanges: ranges });
       }
       else if (currentFile.type.startsWith('audio/')) {
-        processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile });
+        var mRanges = [];
+        document.querySelectorAll('#audioMuteList .mute-item').forEach(el => {
+          var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
+          if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
+        });
+        processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile, muteRanges: mRanges });
       }
       updateMediaListUI();
     } catch (e) { alert("Σφάλμα: " + e.message); }
