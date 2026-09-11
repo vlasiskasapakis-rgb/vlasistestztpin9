@@ -128,7 +128,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>1Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -600,8 +600,16 @@
     }
     else if(currentFile.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block';
-      var vid = $('videoPreview'); vid.src = currentObjectURL;
-      $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
+      var vid = $('videoPreview'); 
+      
+      $('vTimeNow').textContent = 'Φόρτωση βίντεο στη μνήμη...';
+      vid.src = currentObjectURL;
+      vid.load(); // Αναγκαστική φόρτωση metadata για κινητά
+      
+      vid.onloadedmetadata = function() {
+        $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
+      };
+      
       addVideoRangeRow();
     }
     else if(currentFile.type.startsWith('audio/')) {
@@ -753,11 +761,10 @@
     setAR(true);
   };
 
-  // --- Επεξεργαστής Βίντεο (Με παύση AR για αποφυγή κολλημάτων) ---
+  // --- Επεξεργαστής Βίντεο ---
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
       
-      // Κόβουμε εντελώς την κάμερα και την AR σκηνή για να ελευθερωθεί η GPU!
       setAR(false);
 
       var video = $('videoPreview');
@@ -834,7 +841,6 @@
         video.onended = null;
         if (g) { g.gain.gain.cancelScheduledValues(0); g.gain.gain.setValueAtTime(1, g.ctx.currentTime); }
         
-        // Ξαναδίνουμε ζωή στην AR σκηνή τώρα που τελειώσαμε
         setAR(true);
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
@@ -913,7 +919,7 @@
         })();
       }).catch(function (err) {
         running = false;
-        setAR(true); // Επαναφορά σε περίπτωση σφάλματος
+        setAR(true); 
         reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + (err && err.message ? err.message : err)));
       });
     });
