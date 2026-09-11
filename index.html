@@ -310,7 +310,6 @@
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
 
-      // Καθαρό heading (χωρίς +180), απόλυτα συγχρονισμένο με την κάμερα
       window.currentHeading = h;
       if (this.displayHeading === undefined) this.displayHeading = h;
       var diff = h - (this.displayHeading % 360);
@@ -360,19 +359,16 @@
     prepareARClusters();
     var parts = [];
 
-    // Δημιουργία clusters
     AR_CLUSTERS.forEach(c => {
       var imgId = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', true);
       parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
-    // Δημιουργία POI markers
     STORIES.forEach(s => {
       var imgId = makeLabelImage(s.title, s.subtitle, false);
       parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
-    // Καθαρή κάμερα GPS χωρίς conflicts
     parts.push(`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
 
     var scene = document.createElement('a-scene');
