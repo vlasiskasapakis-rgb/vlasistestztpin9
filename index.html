@@ -271,7 +271,7 @@
     { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
   ];
 
-  var SMOOTHING = 0.1, MIN_DIST = 2, Y_OFF = 1.2;
+  var MIN_DIST = 2, Y_OFF = 1.2;
   var AR_CLUSTERS = [], CLUSTER_RADIUS_M = 50, CLUSTER_REVEAL_M = 80;
   var me = null, map = null, meMarker = null, accCircle = null, followMe = true;
   window.currentHeading = null;
@@ -364,25 +364,28 @@
   function buildScene() {
     prepareARClusters();
     var parts = [];
-    
-    // Έλεγχος iOS για αυτόματη περιστροφή 180 μοιρών στα AR entities
-    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    var iosRot = isIOS ? ' rotation="0 180 0"' : '';
 
+    // Δημιουργία clusters
     AR_CLUSTERS.forEach(c => {
       var imgId = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', true);
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"${iosRot}><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
+
+    // Δημιουργία POI markers
     STORIES.forEach(s => {
       var imgId = makeLabelImage(s.title, s.subtitle, false);
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"${iosRot}><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
-    parts.push(`<a-camera id="cam" look-controls-enabled="false" arjs-device-orientation-controls="smoothingFactor: ${SMOOTHING}" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
+
+    // Καθαρή κάμερα GPS χωρίς conflicts
+    parts.push(`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
 
     var scene = document.createElement('a-scene');
-    scene.setAttribute('hud-compass', ''); scene.setAttribute('vr-mode-ui', 'enabled: false');
+    scene.setAttribute('hud-compass', ''); 
+    scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
-    scene.innerHTML = parts.join(''); document.body.appendChild(scene);
+    scene.innerHTML = parts.join(''); 
+    document.body.appendChild(scene);
   }
 
   function updateARLabels() {
