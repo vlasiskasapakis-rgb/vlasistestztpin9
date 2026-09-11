@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>Διαδρομή μνήμης — Μυτιλήνη (AR & Local Editor)</title>
+<title>Διαδρομή μνήμης — Μυτιλήνη (Fast Local Editor)</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
@@ -100,8 +100,6 @@
   .mute-list { background: #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; color: #333; }
   .mute-item { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
   .mute-item input { width: 70px; padding: 5px; border-radius: 4px; border: 1px solid #ccc;}
-  
-  #processingOverlay { position: absolute; inset: 0; background: rgba(0,0,0,0.85); color: white; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; padding: 20px;}
 </style>
 </head>
 <body>
@@ -173,14 +171,14 @@
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
+    <!-- ΒΙΝΤΕΟ (Γρήγορος Editor με Metadata) -->
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline style="width:100%; display:block;"></video>
       </div>
-      
-      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Διαστήματα Ολικού Blur & Mute (Tαυτόχρονα):</label>
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Διαστήματα Ολικού Blur & Mute (Ακαριαία):</label>
       <div id="videoBlurMuteList" class="mute-list"></div>
-      <button onclick="addVideoBlurMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Διαστήματος (Blur & Mute)</button>
+      <button onclick="addVideoBlurMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Διαστήματος</button>
     </div>
 
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
@@ -193,12 +191,6 @@
     <div class="btn-row">
       <button class="btn-secondary" id="cancelSingleBtn">Άκυρο Αρχείου</button>
       <button class="btn-primary" id="saveFileBtn">Αποθήκευση</button>
-    </div>
-    
-    <div id="processingOverlay">
-      <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία...</h3>
-      <p style="font-size:14px; margin:0; margin-bottom:15px;">Το αρχείο καταγράφεται τοπικά. Παρακαλώ περιμένετε.</p>
-      <button type="button" id="cancelProcessBtn" style="padding:10px 20px; background:#d9534f; color:#fff; font-weight:bold; border-radius:4px;">Ακύρωση Διαδικασίας</button>
     </div>
   </div>
 </div>
@@ -383,7 +375,7 @@
   function onPosition(pos) {
     me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
     updateARLabels(); updateMap();
-    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(window.currentHeading)}°`);
+    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(me.heading || 0)}°`);
     
     $('addBtn').classList.add('on');
     $('locDisplay').textContent = `${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}`;
@@ -410,12 +402,11 @@
   });
 
   // ==========================================
-  // 2. ΕΠΕΞΕΡΓΑΣΤΗΣ (ΟΛΙΚΟ BLUR & MUTE ΔΙΑΣΤΗΜΑΤΑ)
+  // 2. FAST LOCAL EDITOR (ΑΚΑΡΙΑΙΑ ΑΠΟΘΗΚΕΥΣΗ)
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
   var currentObjectURL = null;
-  var activeRecorder = null; 
 
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d'), imgObj = null, isDrawing = false;
   var imageHistory = []; 
@@ -516,38 +507,34 @@
     $('uploadSheet').classList.add('on');
   };
 
+  // ΑΚΑΡΙΑΙΑ ΑΠΟΘΗΚΕΥΣΗ (Χωρίς Recording/Rendering)
   $('saveFileBtn').onclick = async function() {
-    $('processingOverlay').style.display = 'flex';
-    
     try {
       if (currentFile.type.startsWith('image/')) {
         processedFiles.push({ name: currentFile.name, type: 'image/jpeg', dataURL: canvas.toDataURL('image/jpeg', 0.8) });
       } 
       else if (currentFile.type.startsWith('video/')) {
-        var resBlob = await processVideoLocal(currentFile);
-        if (resBlob) processedFiles.push({ name: currentFile.name, type: 'video/webm', blob: resBlob });
+        // Μαζεύουμε τα διαστήματα blur/mute για να τα αποθηκεύσουμε ως metadata μαζί με το αρχείο
+        var ranges = [];
+        document.querySelectorAll('.vbm-start').forEach((sInput, idx) => {
+          var eInput = document.querySelectorAll('.vbm-end')[idx];
+          if(sInput && eInput) {
+            var s = parseFloat(sInput.value), end = parseFloat(eInput.value);
+            if(!isNaN(s) && !isNaN(end) && end>s) ranges.push({s:s, e:end});
+          }
+        });
+        // Σώζουμε το αρχικό αρχείο βίντεο και τις ρυθμίσεις του ακαριαία!
+        processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile, blurRanges: ranges });
       }
       else if (currentFile.type.startsWith('audio/')) {
-        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: await processAudioLocal(currentFile) });
+        processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile });
       }
       updateMediaListUI();
     } catch (e) { alert("Σφάλμα: " + e.message); }
     
-    $('processingOverlay').style.display = 'none'; 
-    if (currentFile) {
-      $('editorSheet').classList.remove('on');
-      $('uploadSheet').classList.add('on');
-      currentFile = null;
-    }
-  };
-
-  $('cancelProcessBtn').onclick = function() {
-    if (activeRecorder && activeRecorder.state === 'recording') {
-      activeRecorder.stop();
-    }
-    var video = $('videoPreview');
-    video.pause();
-    $('processingOverlay').style.display = 'none';
+    $('editorSheet').classList.remove('on');
+    $('uploadSheet').classList.add('on');
+    currentFile = null;
   };
 
   window.removeMedia = function(index) {
@@ -608,127 +595,6 @@
     container.innerHTML = '';
     $('previewSheet').classList.remove('on');
   };
-
-  // --- Επεξεργαστής Βίντεο: Ολικό Blur & Mute σε επιλεγμένα χρονικά διαστήματα ---
-  function processVideoLocal(file) {
-    return new Promise((resolve) => {
-      var video = $('videoPreview'), oCanvas = document.createElement('canvas'), oCtx = oCanvas.getContext('2d');
-      oCanvas.width = video.videoWidth; oCanvas.height = video.videoHeight;
-      
-      var canvasStream = oCanvas.captureStream(30), finalStream = canvasStream;
-      
-      var ranges = [];
-      document.querySelectorAll('.vbm-start').forEach((sInput, idx) => {
-        var eInput = document.querySelectorAll('.vbm-end')[idx];
-        if(sInput && eInput) {
-          var s = parseFloat(sInput.value), end = parseFloat(eInput.value);
-          if(!isNaN(s) && !isNaN(end) && end>s) ranges.push({s:s, e:end});
-        }
-      });
-
-      var aCtx = null;
-      try {
-        aCtx = new (window.AudioContext || window.webkitAudioContext)();
-        var src = aCtx.createMediaElementSource(video);
-        var gainNode = aCtx.createGain();
-        gainNode.gain.setValueAtTime(1, 0);
-        
-        // Μηδενισμός έντασης στα καθορισμένα διαστήματα
-        ranges.forEach(r => {
-          gainNode.gain.setValueAtTime(1, Math.max(0, r.s-0.01));
-          gainNode.gain.setValueAtTime(0, r.s);
-          gainNode.gain.setValueAtTime(0, r.e);
-          gainNode.gain.setValueAtTime(1, r.e+0.01);
-        });
-
-        var dest = aCtx.createMediaStreamDestination();
-        src.connect(gainNode);
-        gainNode.connect(dest);
-        src.connect(aCtx.destination); 
-
-        if(dest.stream.getAudioTracks().length > 0) {
-          finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
-        }
-      } catch(e){}
-
-      var rec = new MediaRecorder(finalStream, {mimeType: 'video/webm'}), chunks = [];
-      activeRecorder = rec;
-      
-      rec.ondataavailable = e => chunks.push(e.data);
-      rec.onstop = () => { 
-        video.pause();
-        if (chunks.length > 0) {
-          resolve(new Blob(chunks, {type: 'video/webm'}));
-        } else {
-          resolve(null); 
-        }
-      };
-      
-      function drawFrame() {
-        if(video.paused || video.ended) return;
-        
-        var currentTime = video.currentTime;
-        // Ελέγχουμε αν το τρέχον δευτερόλεπτο εμπίπτει σε κάποιο από τα ranges για ολικό blur
-        var isBlurred = ranges.some(r => currentTime >= r.s && currentTime <= r.e);
-        
-        oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
-        if (isBlurred) {
-          oCtx.filter = 'blur(20px)';
-        } else {
-          oCtx.filter = 'none';
-        }
-        oCtx.drawImage(video, 0, 0, oCanvas.width, oCanvas.height);
-
-        requestAnimationFrame(drawFrame);
-      }
-
-      video.currentTime = 0; 
-      video.play().then(() => { 
-        if(aCtx) aCtx.resume();
-        rec.start(); 
-        drawFrame(); 
-      });
-      video.onended = () => { if(rec.state === 'recording') rec.stop(); };
-    });
-  }
-
-  // --- Επεξεργαστής Ήχου ---
-  function processAudioLocal(file) {
-    return new Promise((resolve) => {
-      var reader = new FileReader();
-      reader.onload = async e => {
-        var aCtx = new (window.AudioContext || window.webkitAudioContext)(), aBuf = await aCtx.decodeAudioData(e.target.result);
-        var mRanges = [];
-        document.querySelectorAll('#audioMuteList .mute-item').forEach(el => {
-          var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-          if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
-        });
-        
-        var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
-        var src = oCtx.createBufferSource(); src.buffer = aBuf;
-        var gain = oCtx.createGain(); gain.gain.setValueAtTime(1, 0);
-        mRanges.forEach(r => { gain.gain.setValueAtTime(1, Math.max(0, r.s-0.01)); gain.gain.setValueAtTime(0, r.s); gain.gain.setValueAtTime(0, r.e); gain.gain.setValueAtTime(1, r.e+0.01); });
-        src.connect(gain); gain.connect(oCtx.destination); src.start(0);
-        
-        var renBuf = await oCtx.startRendering();
-        var numCh = renBuf.numberOfChannels, len = renBuf.length*numCh*2+44, buf = new ArrayBuffer(len), view = new DataView(buf), pos=0;
-        var set16 = d => { view.setUint16(pos, d, true); pos+=2; }, set32 = d => { view.setUint32(pos, d, true); pos+=4; };
-        
-        set32(0x46464952); set32(len-8); set32(0x45564157); set32(0x20746d66); set32(16); set16(1); set16(numCh);
-        set32(renBuf.sampleRate); set32(renBuf.sampleRate*2*numCh); set16(numCh*2); set16(16); set32(0x61746164); set32(len-pos-4);
-        
-        var chs = []; for(var i=0; i<numCh; i++) chs.push(renBuf.getChannelData(i));
-        for(var offset=0; offset<renBuf.length; offset++) {
-          for(var c=0; c<numCh; c++) {
-            var smp = Math.max(-1, Math.min(1, chs[c][offset]));
-            set16((0.5+smp<0 ? smp*32768 : smp*32767)|0);
-          }
-        }
-        resolve(new Blob([buf], {type: "audio/wav"}));
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  }
 })();
 </script>
 </body>
