@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>Διαδρομή μνήμης — Μυτιλήνη</title>
+<title>Διαδρομή μνήμης — Μυτιλήνη (Με Υποστήριξη Upload & Blur)</title>
 
 <!--
-  WALKING MEMORY (GA 101288157) — spike για το Task 4.2.
-  ΑΠΑΙΤΕΙ HTTPS. Προστέθηκε MarkerCluster, δυναμικό AR Cluster & Βελτιωμένος ρυθμός ανανέωσης GPS.
+  WALKING MEMORY (GA 101288157)
+  ΑΠΑΙΤΕΙ HTTPS. Προστέθηκε MarkerCluster, δυναμικό AR Cluster, 
+  κουμπί Upload, χειροκίνητο Blur Εικόνας και Redact Βίντεο/Ήχου.
 -->
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -99,15 +100,9 @@
   .leaflet-control-attribution a { color: var(--chalk) !important; }
 
   .map-cluster-dot {
-    background: var(--sea);
-    color: var(--bone);
-    border: 3px solid var(--ink);
-    border-radius: 50%;
-    font-size: 14px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: var(--sea); color: var(--bone); border: 3px solid var(--ink);
+    border-radius: 50%; font-size: 14px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
     box-shadow: 0 0 4px rgba(0,0,0,0.5);
   }
 
@@ -117,18 +112,14 @@
     background: rgba(14,42,46,.92); color: var(--bone);
     display: flex; align-items: center; justify-content: center;
   }
-  #compass .needle {
-    position: absolute; inset: 0; transform-origin: 50% 50%;
-  }
+  #compass .needle { position: absolute; inset: 0; transform-origin: 50% 50%; }
   #compass .needle::before {
-    content: ''; position: absolute; left: 50%; top: 8px;
-    transform: translateX(-50%);
+    content: ''; position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
     width: 0; height: 0; border-left: 7px solid transparent;
     border-right: 7px solid transparent; border-bottom: 19px solid var(--chalk);
   }
   #compass .needle::after {
-    content: ''; position: absolute; left: 50%; bottom: 12px;
-    transform: translateX(-50%);
+    content: ''; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
     width: 0; height: 0; border-left: 7px solid transparent;
     border-right: 7px solid transparent; border-top: 19px solid rgba(242,237,228,.28);
   }
@@ -141,16 +132,13 @@
   .me-rot  { position: absolute; inset: 0; transform-origin: 50% 50%; }
   .me-cone {
     position: absolute; left: 50%; bottom: 50%; transform: translateX(-50%);
-    width: 0; height: 0;
-    border-left: 17px solid transparent;
-    border-right: 17px solid transparent;
-    border-top: 30px solid rgba(240, 194, 68, 0.88);
+    width: 0; height: 0; border-left: 17px solid transparent;
+    border-right: 17px solid transparent; border-top: 30px solid rgba(240, 194, 68, 0.88);
     filter: drop-shadow(0 0 2px rgba(14, 42, 46, 0.95));
   }
   .me-rot.unknown .me-cone { display: none; }
   .me-dot {
-    position: absolute; left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     width: 18px; height: 18px; border-radius: 50%;
     background: var(--chalk); border: 3px solid var(--ink);
   }
@@ -193,8 +181,59 @@
     display: inline-block; margin-bottom: 16px; padding: 5px 9px;
     background: rgba(78,140,147,.16); color: var(--sea); font-size: 13px;
   }
+
+  /* --- ΝΕΟ: Κουμπί & Μενού Ανεβάσματος Ιστορίας --- */
+  #addStoryBtn {
+    position: fixed; bottom: calc(var(--handle) + var(--pad) + 10px);
+    right: var(--pad); z-index: 25; width: 56px; height: 56px;
+    border-radius: 50%; background: var(--chalk); color: var(--ink);
+    font-size: 32px; font-weight: 300; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    transition: bottom .28s cubic-bezier(.32,.72,0,1); display: none; pointer-events: auto;
+  }
+  #addStoryBtn.on { display: flex; }
+  body.drawer-open #addStoryBtn { bottom: calc(52% + var(--pad)); }
+
+  .overlay-sheet {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    flex-direction: column; justify-content: flex-end; background: rgba(14,42,46,.85);
+  }
+  .overlay-sheet.on { display: flex; }
+  .sheet-content {
+    background: var(--bone); color: var(--ink);
+    padding: 26px var(--pad) calc(26px + env(safe-area-inset-bottom));
+    max-height: 90%; overflow-y: auto; border-radius: 16px 16px 0 0;
+  }
+  .sheet-content h2 { margin: 0 0 16px; font-size: 22px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--sea); }
+  .form-group input[type="text"] {
+    width: 100%; padding: 10px; border: 2px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 16px;
+  }
+  .location-badge {
+    display: inline-block; padding: 6px 12px; background: rgba(78,140,147,.16); 
+    color: var(--sea); font-size: 13px; border-radius: 4px; font-variant-numeric: tabular-nums;
+  }
+  .btn-row { display: flex; gap: 10px; margin-top: 24px; }
+  .btn-row button { flex: 1; padding: 14px; font-size: 16px; font-weight: 600; border-radius: 6px; }
+  .btn-primary { background: var(--sea); color: var(--bone); }
+  .btn-secondary { background: #ccc; color: var(--ink); }
+
+  /* --- ΝΕΟ: Εργαλεία Επεξεργασίας (Editor) --- */
+  #editorCanvasContainer {
+    width: 100%; height: 300px; background: #ddd; border-radius: 6px;
+    overflow: hidden; position: relative; touch-action: none; display: none;
+  }
+  #imageEditorCanvas { width: 100%; height: 100%; object-fit: contain; cursor: crosshair; }
+  #editorHint { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #fff; padding: 4px 8px; font-size: 12px; border-radius: 4px; pointer-events: none;}
+  
+  #mediaEditorContainer { display: none; flex-direction: column; gap: 10px; }
+  #mediaPreview { width: 100%; max-height: 250px; background: #000; border-radius: 6px; }
+  .time-inputs { display: flex; gap: 10px; align-items: center; }
+  .time-inputs input { width: 80px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+
   @media (prefers-reduced-motion: reduce) {
-    #drawer, #nearest { transition: none !important; }
+    #drawer, #nearest, #addStoryBtn { transition: none !important; }
   }
 </style>
 </head>
@@ -215,6 +254,9 @@
   </button>
 </div>
 
+<!-- Κουμπί Προσθήκης Ιστορίας -->
+<button id="addStoryBtn" type="button" aria-label="Προσθήκη νέας ιστορίας">+</button>
+
 <div id="drawer" role="region" aria-label="Περιοχή Χάρτη">
   <button id="handle" type="button" aria-expanded="false" aria-controls="map">
     <span class="grip" aria-hidden="true"></span>
@@ -226,7 +268,7 @@
   </div>
 </div>
 
-<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true">
+<div id="sheet" role="dialog" aria-modal="true" aria-hidden="true">
   <div id="sheetInner" tabindex="-1">
     <span class="note">Δοκιμαστικό κείμενο, όχι μαρτυρία</span>
     <h2 id="sheetTitle"></h2>
@@ -236,41 +278,72 @@
   </div>
 </div>
 
+<!-- Μενού Ανεβάσματος (Upload Sheet) -->
+<div id="uploadSheet" class="overlay-sheet" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="sheet-content" tabindex="-1">
+    <h2>Νέα Ιστορία</h2>
+    
+    <div class="form-group">
+      <label>Τοποθεσία (Κλειδωμένη στο στίγμα σου)</label>
+      <div id="newStoryLocation" class="location-badge">Αναμονή...</div>
+    </div>
+
+    <div class="form-group">
+      <label for="newStoryTitle">Τίτλος Ιστορίας</label>
+      <input type="text" id="newStoryTitle" placeholder="π.χ. Αναμνήσεις από την παλιά αγορά">
+    </div>
+
+    <div class="form-group">
+      <label for="newStoryMedia">Πολυμέσα (Εικόνα, Βίντεο, Ήχος)</label>
+      <input type="file" id="newStoryMedia" accept="image/*,video/*,audio/*" style="font-size: 14px;">
+    </div>
+
+    <div class="btn-row">
+      <button id="cancelUploadBtn" type="button" class="btn-secondary">Ακύρωση</button>
+      <button id="submitUploadBtn" type="button" class="btn-primary">Επεξεργασία &amp; Ανέβασμα</button>
+    </div>
+  </div>
+</div>
+
+<!-- Μενού Επεξεργασίας (Editor Sheet - Blur & Redact) -->
+<div id="editorSheet" class="overlay-sheet" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="sheet-content" tabindex="-1">
+    <h2 id="editorTitle">Επεξεργασία Αρχείου</h2>
+    
+    <!-- Editor Εικόνας (Blur) -->
+    <div id="editorCanvasContainer">
+      <canvas id="imageEditorCanvas"></canvas>
+      <div id="editorHint">Σύρε το δάχτυλο για να θολώσεις περιοχές</div>
+    </div>
+
+    <!-- Editor Βίντεο/Ήχου (Redact - Επιλογή χρόνου) -->
+    <div id="mediaEditorContainer">
+      <video id="mediaPreview" controls playsinline></video>
+      <p style="font-size: 13px; color: var(--sea); margin:0;">Επίλεξε το τμήμα που θέλεις να κρατήσεις (ή να αφαιρέσεις):</p>
+      <div class="time-inputs">
+        <label>Από: <input type="number" id="redactStart" min="0" value="0" step="1"> δευτ.</label>
+        <label>Έως: <input type="number" id="redactEnd" min="0" value="0" step="1"> δευτ.</label>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button id="cancelEditorBtn" type="button" class="btn-secondary">Πίσω</button>
+      <button id="finalUploadBtn" type="button" class="btn-primary">Αποθήκευση &amp; Upload</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
 
   var STORIES = [
-    {
-      id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά',
-      lat: 39.105132, lon: 26.554781, radius: 35, 
-      text: 'Η μεγαλύτερη εκκλησία της πόλης, σημείο αναφοράς.'
-    },
-    {
-      id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή',
-      lat: 39.106641, lon: 26.557426, radius: 40,
-      text: 'Η κεντρική πλατεία της Μυτιλήνης στο λιμάνι.' 
-    },
-    {
-      id: 'mitropoli', title: 'Μητρόπολη', subtitle: 'Άγιος Αθανάσιος',
-      lat: 39.108346, lon: 26.557850, radius: 30, 
-      text: 'Ο Μητροπολιτικός Ναός, κρυμμένος στα στενά.'
-    },
-    {
-      id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Οδός Ερμού (Βόρεια)',
-      lat: 39.110373, lon: 26.557807, radius: 30, 
-      text: 'Το παλιό οθωμανικό τέμενος της αγοράς.'
-    },
-    {
-      id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα',
-      lat: 39.11180, lon: 26.55660, radius: 40,
-      text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.'
-    },
-    {
-      id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού',
-      lat: 39.110015, lon: 26.558099, radius: 40,  
-      text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.'
-    }
+    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης, σημείο αναφοράς.' },
+    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης στο λιμάνι.' },
+    { id: 'mitropoli', title: 'Μητρόπολη', subtitle: 'Άγιος Αθανάσιος', lat: 39.108346, lon: 26.557850, radius: 30, text: 'Ο Μητροπολιτικός Ναός, κρυμμένος στα στενά.' },
+    { id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Οδός Ερμού (Βόρεια)', lat: 39.110373, lon: 26.557807, radius: 30, text: 'Το παλιό οθωμανικό τέμενος της αγοράς.' },
+    { id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα', lat: 39.11180, lon: 26.55660, radius: 40, text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.' },
+    { id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού', lat: 39.110015, lon: 26.558099, radius: 40, text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.' }
   ];
 
   var params = new URLSearchParams(location.search);
@@ -295,15 +368,13 @@
     return 2 * R * Math.asin(Math.sqrt(a));
   }
   
-  function fmt(m) {
-    return m < 1000 ? Math.round(m) + ' μέτρα' : (m / 1000).toFixed(1) + ' χιλιόμετρα';
-  }
+  function fmt(m) { return m < 1000 ? Math.round(m) + ' μέτρα' : (m / 1000).toFixed(1) + ' χλμ'; }
 
   var _camPos = new THREE.Vector3();
   AFRAME.registerComponent('billboard', {
     tick: function () {
       var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) { return; }
+      if (!cam) return;
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
       o.lookAt(_camPos.x, o.position.y, _camPos.z);
@@ -315,17 +386,13 @@
     tick: function () {
       var cam = this.el.sceneEl && this.el.sceneEl.camera;
       if (!cam) return;
-      
       cam.getWorldDirection(_cameraDir);
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
       window.currentHeading = h;
-
       if (this.displayHeading === undefined) this.displayHeading = h;
-      
       var diff = h - (this.displayHeading % 360);
-      if (diff > 180) diff -= 360;
-      else if (diff < -180) diff += 360;
+      if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
       this.displayHeading += diff;
 
       if (!this.needle) {
@@ -341,60 +408,28 @@
   });
 
   function makeLabelImage(story) {
-    var W = 900, H = 300, dpr = 2;
-    var c = document.createElement('canvas');
-    c.width = W * dpr; c.height = H * dpr;
-    var g = c.getContext('2d');
-    g.scale(dpr, dpr);
-
-    g.fillStyle = 'rgba(14,42,46,0.90)';
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#F0C244'; 
-    g.fillRect(0, 0, 14, H);
-
-    g.fillStyle = '#F2EDE4';
-    g.font = '600 82px -apple-system, sans-serif';
-    g.textBaseline = 'middle';
+    var W = 900, H = 300, dpr = 2, c = document.createElement('canvas');
+    c.width = W * dpr; c.height = H * dpr; var g = c.getContext('2d'); g.scale(dpr, dpr);
+    g.fillStyle = 'rgba(14,42,46,0.90)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#F0C244'; g.fillRect(0, 0, 14, H);
+    g.fillStyle = '#F2EDE4'; g.font = '600 82px -apple-system, sans-serif'; g.textBaseline = 'middle';
     g.fillText(story.title, 52, H / 2 - 26);
-
-    g.fillStyle = '#8FC0C4';
-    g.font = '46px -apple-system, sans-serif';
-    g.fillText(story.subtitle, 52, H / 2 + 50);
-
-    var img = document.createElement('img');
-    img.id = 'lbl-' + story.id;
-    img.className = 'labelsrc';
-    img.src = c.toDataURL('image/png');
-    document.body.appendChild(img);
+    g.fillStyle = '#8FC0C4'; g.font = '46px -apple-system, sans-serif'; g.fillText(story.subtitle, 52, H / 2 + 50);
+    var img = document.createElement('img'); img.id = 'lbl-' + story.id; img.className = 'labelsrc';
+    img.src = c.toDataURL('image/png'); document.body.appendChild(img);
     return img.id;
   }
 
   function makeClusterImage(count) {
-    var W = 900, H = 300, dpr = 2;
-    var c = document.createElement('canvas');
-    c.width = W * dpr; c.height = H * dpr;
-    var g = c.getContext('2d');
-    g.scale(dpr, dpr);
-
-    g.fillStyle = 'rgba(14,42,46,0.95)';
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#4E8C93'; 
-    g.fillRect(0, 0, 20, H);
-
-    g.fillStyle = '#F2EDE4';
-    g.font = '600 82px -apple-system, sans-serif';
-    g.textBaseline = 'middle';
+    var W = 900, H = 300, dpr = 2, c = document.createElement('canvas');
+    c.width = W * dpr; c.height = H * dpr; var g = c.getContext('2d'); g.scale(dpr, dpr);
+    g.fillStyle = 'rgba(14,42,46,0.95)'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#4E8C93'; g.fillRect(0, 0, 20, H);
+    g.fillStyle = '#F2EDE4'; g.font = '600 82px -apple-system, sans-serif'; g.textBaseline = 'middle';
     g.fillText(count + ' Σημεία κοντά', 62, H / 2 - 26);
-
-    g.fillStyle = '#8FC0C4';
-    g.font = '46px -apple-system, sans-serif';
-    g.fillText('Πλησίασε για να τα δεις', 62, H / 2 + 50);
-
-    var img = document.createElement('img');
-    img.id = 'lbl-cluster-' + Math.floor(Math.random() * 10000);
-    img.className = 'labelsrc';
-    img.src = c.toDataURL('image/png');
-    document.body.appendChild(img);
+    g.fillStyle = '#8FC0C4'; g.font = '46px -apple-system, sans-serif'; g.fillText('Πλησίασε για να τα δεις', 62, H / 2 + 50);
+    var img = document.createElement('img'); img.id = 'lbl-cluster-' + Math.floor(Math.random() * 10000);
+    img.className = 'labelsrc'; img.src = c.toDataURL('image/png'); document.body.appendChild(img);
     return img.id;
   }
 
@@ -402,22 +437,17 @@
     var assigned = {};
     STORIES.forEach(function(s, i) {
       if (assigned[i]) return;
-      var c = { id: 'ar-cluster-' + i, stories: [s], lat: s.lat, lon: s.lon };
-      assigned[i] = true;
-      
+      var c = { id: 'ar-cluster-' + i, stories: [s], lat: s.lat, lon: s.lon }; assigned[i] = true;
       STORIES.forEach(function(s2, j) {
         if (i === j || assigned[j]) return;
         if (distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
-          c.stories.push(s2);
-          assigned[j] = true;
+          c.stories.push(s2); assigned[j] = true;
         }
       });
-      
       if (c.stories.length > 1) {
         var sumLat = 0, sumLon = 0;
         c.stories.forEach(function(cs) { sumLat += cs.lat; sumLon += cs.lon; });
-        c.lat = sumLat / c.stories.length;
-        c.lon = sumLon / c.stories.length;
+        c.lat = sumLat / c.stories.length; c.lon = sumLon / c.stories.length;
         AR_CLUSTERS.push(c);
       }
     });
@@ -426,43 +456,25 @@
   function buildScene() {
     prepareARClusters();
     var parts = [];
-
     AR_CLUSTERS.forEach(function(c) {
       var imgId = makeClusterImage(c.stories.length);
       parts.push(
-        '<a-entity id="' + c.id + '" class="ar-cluster" ' +
-        'gps-new-entity-place="latitude: ' + c.lat + '; longitude: ' + c.lon + '" ' +
-        'billboard scale="5 5 1">' +
-          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" ' +
-          'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
-          '</a-plane>' +
+        '<a-entity id="' + c.id + '" class="ar-cluster" gps-new-entity-place="latitude: ' + c.lat + '; longitude: ' + c.lon + '" billboard scale="5 5 1">' +
+          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" material="src: #' + imgId + '; transparent: true; shader: flat; side: double"></a-plane>' +
         '</a-entity>'
       );
     });
-
     STORIES.forEach(function (s) {
       var imgId = makeLabelImage(s);
       parts.push(
-        '<a-entity class="poi" data-id="' + s.id + '" ' +
-        'gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" ' +
-        'billboard scale="5 5 1">' +
-          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" ' +
-          'material="src: #' + imgId + '; transparent: true; shader: flat; side: double">' +
-          '</a-plane>' +
+        '<a-entity class="poi" data-id="' + s.id + '" gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" billboard scale="5 5 1">' +
+          '<a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" material="src: #' + imgId + '; transparent: true; shader: flat; side: double"></a-plane>' +
         '</a-entity>'
       );
     });
-
-    parts.push(
-      '<a-camera id="cam" ' +
-      'look-controls-enabled="false" ' +
-      'arjs-device-orientation-controls="smoothingFactor: ' + SMOOTHING + '" ' +
-      'gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"></a-camera>'
-    );
-
+    parts.push('<a-camera id="cam" look-controls-enabled="false" arjs-device-orientation-controls="smoothingFactor: ' + SMOOTHING + '" gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"></a-camera>');
     var scene = document.createElement('a-scene');
-    scene.setAttribute('hud-compass', '');
-    scene.setAttribute('vr-mode-ui', 'enabled: false');
+    scene.setAttribute('hud-compass', ''); scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('loading-screen', 'enabled: false');
     scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
     scene.setAttribute('renderer', 'antialias: true; alpha: true');
@@ -472,262 +484,268 @@
 
   function updateARLabels() {
     if (!me) return;
-
     AR_CLUSTERS.forEach(function(c) {
-      var el = document.getElementById(c.id);
-      if (!el) return;
+      var el = document.getElementById(c.id); if (!el) return;
       var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
-      
-      if (d < CLUSTER_REVEAL_M) {
-        el.setAttribute('visible', 'false');
-      } else {
-        el.setAttribute('visible', 'true');
-        var k = Math.max(d, 25) * 0.09;
-        el.setAttribute('scale', k + ' ' + k + ' 1');
+      if (d < CLUSTER_REVEAL_M) { el.setAttribute('visible', 'false'); } else {
+        el.setAttribute('visible', 'true'); var k = Math.max(d, 25) * 0.09; el.setAttribute('scale', k + ' ' + k + ' 1');
       }
     });
-
     STORIES.forEach(function (s) {
-      var el = document.querySelector('.poi[data-id="' + s.id + '"]');
-      if (!el) return;
-
+      var el = document.querySelector('.poi[data-id="' + s.id + '"]'); if (!el) return;
       var parentCluster = AR_CLUSTERS.find(function(c) { return c.stories.includes(s); });
-      
       if (parentCluster) {
         var clusterDist = distanceMetres(me.lat, me.lon, parentCluster.lat, parentCluster.lon);
-        if (clusterDist >= CLUSTER_REVEAL_M) {
-          el.setAttribute('visible', 'false');
-          return;
-        }
+        if (clusterDist >= CLUSTER_REVEAL_M) { el.setAttribute('visible', 'false'); return; }
       }
-      
       el.setAttribute('visible', 'true');
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
-      var k = Math.max(d, 25) * 0.09;
-      el.setAttribute('scale', k + ' ' + k + ' 1');
+      var k = Math.max(d, 25) * 0.09; el.setAttribute('scale', k + ' ' + k + ' 1');
     });
   }
 
   var map = null, meMarker = null, accCircle = null, followMe = true;
 
   function initMap() {
-    map = L.map('map', {
-      zoomControl: true, attributionControl: true
-    }).setView([STORIES[0].lat, STORIES[0].lon], 16);
-
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
-
+    map = L.map('map', { zoomControl: true, attributionControl: true }).setView([STORIES[0].lat, STORIES[0].lon], 16);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OSM' }).addTo(map);
     var markers = L.markerClusterGroup({
       maxClusterRadius: 40,
       iconCreateFunction: function(cluster) {
-        return L.divIcon({
-          html: cluster.getChildCount(),
-          className: 'map-cluster-dot',
-          iconSize: [32, 32]
-        });
+        return L.divIcon({ html: cluster.getChildCount(), className: 'map-cluster-dot', iconSize: [32, 32] });
       }
     });
-
     STORIES.forEach(function (s) {
       var m = L.marker([s.lat, s.lon], {
-        icon: L.divIcon({
-          className: '', html: '<div class="poi-dot" aria-hidden="true"></div>',
-          iconSize: [13, 13], iconAnchor: [6, 6]
-        }),
-        title: s.title,
-        alt: s.title
+        icon: L.divIcon({ className: '', html: '<div class="poi-dot" aria-hidden="true"></div>', iconSize: [13, 13], iconAnchor: [6, 6] }),
+        title: s.title, alt: s.title
       }).on('click', function () { openStory(s); });
       markers.addLayer(m);
     });
-
     map.addLayer(markers);
     map.on('dragstart', function () { followMe = false; });
   }
 
   function updateMap() {
-    if (!map || !me) { return; }
+    if (!map || !me) return;
     var ll = [me.lat, me.lon];
-
     if (!meMarker) {
       meMarker = L.marker(ll, {
         icon: L.divIcon({
           className: '',
-          html: '<div class="me-wrap"><div class="me-rot unknown">' +
-                '<div class="me-cone"></div><div class="me-dot"></div>' +
-                '</div></div>',
+          html: '<div class="me-wrap"><div class="me-rot unknown"><div class="me-cone"></div><div class="me-dot"></div></div></div>',
           iconSize: [56, 56], iconAnchor: [28, 28]
-        }),
-        title: 'Η θέση σου', alt: 'Η θέση σου', zIndexOffset: 1000
+        }), zIndexOffset: 1000
       }).addTo(map);
-      accCircle = L.circle(ll, {
-        radius: me.accuracy || 0, color: '#F0C244', weight: 1,
-        fillColor: '#F0C244', fillOpacity: 0.10
-      }).addTo(map);
+      accCircle = L.circle(ll, { radius: me.accuracy || 0, color: '#F0C244', weight: 1, fillColor: '#F0C244', fillOpacity: 0.10 }).addTo(map);
     } else {
-      meMarker.setLatLng(ll);
-      accCircle.setLatLng(ll).setRadius(me.accuracy || 0);
+      meMarker.setLatLng(ll); accCircle.setLatLng(ll).setRadius(me.accuracy || 0);
     }
     if (followMe) { map.setView(ll, map.getZoom(), { animate: false }); }
   }
 
-  var cachedRot = null;
-  var displayMapHeading = 0;
+  var cachedRot = null; var displayMapHeading = 0;
   function applyHeadingToDot() {
     if (!meMarker || window.currentHeading === null) return;
-    
-    if (!cachedRot) {
-      var elm = meMarker.getElement();
-      if (elm) cachedRot = elm.querySelector('.me-rot');
-    }
+    if (!cachedRot) { var elm = meMarker.getElement(); if (elm) cachedRot = elm.querySelector('.me-rot'); }
     if (!cachedRot) return;
-
     cachedRot.classList.remove('unknown');
-    
     var diff = window.currentHeading - (displayMapHeading % 360);
-    if (diff > 180) diff -= 360;
-    else if (diff < -180) diff += 360;
+    if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
     displayMapHeading += diff;
-
     cachedRot.style.transform = 'rotate(' + displayMapHeading + 'deg)';
   }
 
   function setDrawer(open) {
     var d = $('drawer'), hd = $('handle');
-    d.classList.toggle('open', open);
-    document.body.classList.toggle('drawer-open', open);
+    d.classList.toggle('open', open); document.body.classList.toggle('drawer-open', open);
     hd.setAttribute('aria-expanded', open ? 'true' : 'false');
     hd.querySelector('.hint').textContent = open ? 'σύρε κάτω' : 'σύρε πάνω';
-    if (map) {
-      map.invalidateSize();
-      setTimeout(function () { map.invalidateSize(); if (open) { updateMap(); } }, 300);
-    }
+    if (map) { map.invalidateSize(); setTimeout(function () { map.invalidateSize(); if (open) updateMap(); }, 300); }
   }
 
   function initDrawer() {
-    var hd = $('handle');
-    var startY = null, moved = false;
-    hd.addEventListener('click', function () {
-      if (moved) { moved = false; return; }
-      setDrawer(!$('drawer').classList.contains('open'));
-    });
-    hd.addEventListener('pointerdown', function (e) {
-      startY = e.clientY; moved = false;
-      hd.setPointerCapture(e.pointerId);
-    });
-    hd.addEventListener('pointermove', function (e) {
-      if (startY === null) { return; }
-      if (Math.abs(e.clientY - startY) > 12) { moved = true; }
-    });
+    var hd = $('handle'), startY = null, moved = false;
+    hd.addEventListener('click', function () { if (moved) { moved = false; return; } setDrawer(!$('drawer').classList.contains('open')); });
+    hd.addEventListener('pointerdown', function (e) { startY = e.clientY; moved = false; hd.setPointerCapture(e.pointerId); });
+    hd.addEventListener('pointermove', function (e) { if (startY !== null && Math.abs(e.clientY - startY) > 12) moved = true; });
     hd.addEventListener('pointerup', function (e) {
-      if (startY === null) { return; }
+      if (startY === null) return;
       var dy = e.clientY - startY;
-      if (Math.abs(dy) > 24) { setDrawer(dy < 0); }
+      if (Math.abs(dy) > 24) setDrawer(dy < 0);
       startY = null;
     });
   }
 
   function onPosition(pos) {
-    me = {
-      lat: pos.coords.latitude,
-      lon: pos.coords.longitude,
-      accuracy: pos.coords.accuracy
-    };
-    
-    updateARLabels();
-    updateMap();
+    me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
+    updateARLabels(); updateMap();
+    $('status').textContent = 'Ακρίβεια ' + Math.round(me.accuracy) + 'm. ' + (window.currentHeading === null ? 'Πυξίδα: -' : 'Πυξίδα ' + Math.round(window.currentHeading) + '°');
 
-    var dbg = params.has('debug') ? '    Σημεία: ' + STORIES.length : '';
-    $('statusлогу') // safety
-    $('status').textContent =
-      'Ακρίβεια στίγματος συν πλην ' + Math.round(me.accuracy) + ' μέτρα. ' +
-      'Πυξίδα ' + (window.currentHeading === null ? 'χωρίς σήμα' : Math.round(window.currentHeading) + ' μοίρες') + dbg;
+    // Ενεργοποίηση Κουμπιού Upload μόλις βρεθεί το στίγμα
+    $('addStoryBtn').classList.add('on');
 
-    var ranked = STORIES.map(function (s) {
-      return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) };
-    }).sort(function (a, b) { return a.d - b.d; });
-
+    var ranked = STORIES.map(function (s) { return { s: s, d: distanceMetres(me.lat, me.lon, s.lat, s.lon) }; })
+                        .sort(function (a, b) { return a.d - b.d; });
     var c = ranked[0], btn = $('nearest');
     var distText = c.d <= c.s.radius ? 'Είσαι εδώ' : fmt(c.d) + ' μακριά';
-    
     btn.querySelector('.dist').textContent = distText;
     btn.querySelector('.name').textContent = c.s.title;
-    // Update accessibility label explicitly for screen readers
-    btn.setAttribute('aria-label', 'Πλησιέστερο σημείο: ' + c.s.title + ', ' + distText);
-    
-    btn.classList.add('on');
-    btn.onclick = function () { openStory(c.s); };
+    btn.classList.add('on'); btn.onclick = function () { openStory(c.s); };
   }
 
   function openStory(s) {
     lastFocus = document.activeElement;
-    $('sheetTitle').textContent = s.title;
-    $('sheet').querySelector('.sub').textContent = s.subtitle;
-    $('sheet').querySelector('.body').textContent = s.text;
-    
-    var sheet = $('sheet');
-    sheet.classList.add('on');
-    sheet.setAttribute('aria-hidden', 'false');
-    
-    // Focus management for Screen Readers
-    setTimeout(function() {
-      $('sheetInner').focus();
-    }, 100);
+    $('sheetTitle').textContent = s.title; $('sheet').querySelector('.sub').textContent = s.subtitle; $('sheet').querySelector('.body').textContent = s.text;
+    $('sheet').classList.add('on'); $('sheet').setAttribute('aria-hidden', 'false');
+    setTimeout(function() { $('sheetInner').focus(); }, 100);
   }
-  
-  function closeStorySheet() {
-    var sheet = $('sheet');
-    sheet.classList.remove('on');
-    sheet.setAttribute('aria-hidden', 'true');
-    if (lastFocus) {
-      lastFocus.focus();
+  $('closeBtn').addEventListener('click', function() {
+    $('sheet').classList.remove('on'); $('sheet').setAttribute('aria-hidden', 'true');
+    if (lastFocus) lastFocus.focus();
+  });
+
+  // --- ΛΟΓΙΚΗ UPLOAD ΚΑΙ ΕΠΕΞΕΡΓΑΣΙΑΣ ---
+  var currentFile = null;
+  var imageObj = null;
+
+  $('addStoryBtn').addEventListener('click', function() {
+    if (!me) { alert("Αναμονή για GPS..."); return; }
+    $('newStoryLocation').textContent = me.lat.toFixed(5) + ', ' + me.lon.toFixed(5);
+    $('uploadSheet').classList.add('on'); $('uploadSheet').setAttribute('aria-hidden', 'false');
+  });
+
+  $('cancelUploadBtn').addEventListener('click', function() {
+    $('uploadSheet').classList.remove('on'); $('newStoryTitle').value = ''; $('newStoryMedia').value = '';
+  });
+
+  $('submitUploadBtn').addEventListener('click', function() {
+    var fileInput = $('newStoryMedia');
+    if (!$('newStoryTitle').value || fileInput.files.length === 0) {
+      alert("Βάλε τίτλο και επέλεξε αρχείο."); return;
+    }
+    currentFile = fileInput.files[0];
+    $('uploadSheet').classList.remove('on');
+    openEditor(currentFile);
+  });
+
+  $('cancelEditorBtn').addEventListener('click', function() {
+    $('editorSheet').classList.remove('on');
+    $('uploadSheet').classList.add('on'); // Επιστροφή στο προηγούμενο βήμα
+  });
+
+  function openEditor(file) {
+    $('editorSheet').classList.add('on');
+    $('editorSheet').setAttribute('aria-hidden', 'false');
+    
+    var isImage = file.type.startsWith('image/');
+    $('editorCanvasContainer').style.display = isImage ? 'block' : 'none';
+    $('mediaEditorContainer').style.display = !isImage ? 'flex' : 'none';
+    
+    var objectURL = URL.createObjectURL(file);
+
+    if (isImage) {
+      // Επεξεργασία Εικόνας (Χειροκίνητο Blur)
+      var canvas = $('imageEditorCanvas');
+      var ctx = canvas.getContext('2d');
+      imageObj = new Image();
+      imageObj.onload = function() {
+        canvas.width = imageObj.width;
+        canvas.height = imageObj.height;
+        ctx.drawImage(imageObj, 0, 0);
+        URL.revokeObjectURL(objectURL);
+      };
+      imageObj.src = objectURL;
+      setupCanvasBlur(canvas, ctx);
+    } else {
+      // Επεξεργασία Βίντεο / Ήχου (Redact Timeline)
+      var mediaPreview = $('mediaPreview');
+      mediaPreview.src = objectURL;
+      mediaPreview.onloadedmetadata = function() {
+        $('redactEnd').value = Math.floor(mediaPreview.duration);
+        $('redactEnd').max = Math.ceil(mediaPreview.duration);
+        $('redactStart').max = Math.ceil(mediaPreview.duration) - 1;
+      };
     }
   }
 
-  $('closeBtn').addEventListener('click', closeStorySheet);
+  function setupCanvasBlur(canvas, ctx) {
+    var isDrawing = false;
+    var blurRadius = 40; // Μέγεθος "πινέλου" θολώματος
+
+    function getPos(e) {
+      var rect = canvas.getBoundingClientRect();
+      var scaleX = canvas.width / rect.width;
+      var scaleY = canvas.height / rect.height;
+      var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    }
+
+    function drawBlur(pos) {
+      // Για χειροκίνητο blur, ζωγραφίζουμε ξανά το τμήμα της εικόνας αλλά με φίλτρο blur.
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, blurRadius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.filter = 'blur(15px)';
+      ctx.drawImage(imageObj, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+
+    canvas.onpointerdown = function(e) {
+      isDrawing = true;
+      drawBlur(getPos(e));
+      canvas.setPointerCapture(e.pointerId);
+    };
+    canvas.onpointermove = function(e) {
+      if (!isDrawing) return;
+      drawBlur(getPos(e));
+    };
+    canvas.onpointerup = function(e) {
+      isDrawing = false;
+    };
+  }
+
+  $('finalUploadBtn').addEventListener('click', function() {
+    var title = $('newStoryTitle').value;
+    var resultData;
+    
+    if (currentFile.type.startsWith('image/')) {
+      // Λήψη της τελικής εικόνας με τα θολωμένα πρόσωπα
+      resultData = $('imageEditorCanvas').toDataURL('image/jpeg', 0.8);
+      alert("Επιτυχία! Το θολωμένο αρχείο είναι έτοιμο για αποστολή στον Server.\nΤοποθεσία: " + me.lat.toFixed(5) + ", " + me.lon.toFixed(5));
+      // Εδώ καλείς fetch() για POST στον server σου.
+    } else {
+      var start = $('redactStart').value;
+      var end = $('redactEnd').value;
+      alert("Επιτυχία! Στοιχεία προς αποστολή στον Server:\nΑρχείο: " + currentFile.name + "\nΑποκοπή (Redact) από δευτερόλεπτο " + start + " έως " + end + ".\nΗ πραγματική αποκοπή θα γίνει στον Server (π.χ. με FFmpeg).");
+      // Εδώ στέλνεις το αρχείο και τα χρονικά σημεία (start/end) στον Server για τελική επεξεργασία.
+    }
+
+    // Κλείσιμο παραθύρων
+    $('editorSheet').classList.remove('on');
+    $('newStoryTitle').value = '';
+    $('newStoryMedia').value = '';
+  });
+  // --- ΤΕΛΟΣ ΛΟΓΙΚΗΣ UPLOAD ---
 
   $('startBtn').addEventListener('click', function () {
-    var btn = $('startBtn');
-    btn.disabled = true;
-    btn.textContent = 'Άνοιγμα κάμερας…';
-
-    var perm = (window.DeviceOrientationEvent &&
-                typeof DeviceOrientationEvent.requestPermission === 'function')
-      ? DeviceOrientationEvent.requestPermission()
-      : Promise.resolve('granted');
+    var btn = $('startBtn'); btn.disabled = true; btn.textContent = 'Άνοιγμα κάμερας…';
+    var perm = (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function')
+      ? DeviceOrientationEvent.requestPermission() : Promise.resolve('granted');
 
     perm.then(function (state) {
-      if (state !== 'granted') {
-        throw new Error('Δεν δόθηκε άδεια για τους αισθητήρες κίνησης.');
-      }
+      if (state !== 'granted') throw new Error('Δεν δόθηκε άδεια κίνησης.');
       buildScene();
-      $('gate').style.display = 'none';
-      $('hud').classList.add('on');
-      $('hud').removeAttribute('aria-hidden');
-      initMap();
-      initDrawer();
-
-      if (!navigator.geolocation) {
-        $('status').textContent = 'Η συσκευή δεν δίνει τοποθεσία.';
-        return;
-      }
-      
-      navigator.geolocation.watchPosition(
-        onPosition,
-        function (err) {
-          $('status').textContent =
-            'Δεν βρέθηκε στίγμα (κωδικός ' + err.code + '). Βγες σε ανοιχτό χώρο.';
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 } 
-      );
+      $('gate').style.display = 'none'; $('hud').classList.add('on'); initMap(); initDrawer();
+      if (!navigator.geolocation) { $('status').textContent = 'Η συσκευή δεν δίνει τοποθεσία.'; return; }
+      navigator.geolocation.watchPosition(onPosition, function (err) {
+        $('status').textContent = 'Δεν βρέθηκε στίγμα (κωδικός ' + err.code + '). Βγες σε ανοιχτό χώρο.';
+      }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
     }).catch(function (e) {
-      btn.disabled = false;
-      btn.textContent = 'Δοκίμασε ξανά';
-      $('gate').querySelector('p').textContent =
-        'Δεν ξεκίνησε: ' + (e.message || e) +
-        ' Η σελίδα πρέπει να τρέχει σε HTTPS και να έχεις δώσει άδεια.';
+      btn.disabled = false; btn.textContent = 'Δοκίμασε ξανά';
+      $('gate').querySelector('p').textContent = 'Δεν ξεκίνησε: ' + (e.message || e);
     });
   });
 
@@ -736,9 +754,7 @@
       var camEl = document.getElementById('cam');
       if (camEl) {
         camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: 1');
-        setTimeout(function () {
-          camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: ' + SMOOTHING);
-        }, 1000);
+        setTimeout(function () { camEl.setAttribute('arjs-device-orientation-controls', 'smoothingFactor: ' + SMOOTHING); }, 1000);
       }
     }
   });
