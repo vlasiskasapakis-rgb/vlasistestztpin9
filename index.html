@@ -92,13 +92,10 @@
   .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
   .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
 
-  .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; touch-action: none; }
+  .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; }
   #imageCanvas { width: 100%; display: block; }
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
-  
-  /* Στυλ για τα πολλαπλά κουτιά θολώματος */
-  .blur-box-elem { position: absolute; border: 2px dashed var(--chalk); background: rgba(240,194,68,0.25); cursor: move; }
   
   .mute-list { background: #e0e0e0; padding: 10px; border-radius: 6px; margin-bottom: 10px; color: #333; }
   .mute-item { display: flex; gap: 10px; margin-bottom: 5px; align-items: center; }
@@ -177,20 +174,13 @@
     </div>
 
     <div id="videoEditor" class="editor-box" style="background:#fff;">
-      <div id="videoContainer" style="position:relative;">
-        <video id="videoPreview" controls playsinline></video>
-        <!-- Εδώ θα προστίθενται τα πολλαπλά κουτιά blur -->
-        <div id="blurBoxesWrapper" style="position:absolute; inset:0; pointer-events:none;"></div>
+      <div id="videoContainer">
+        <video id="videoPreview" controls playsinline style="width:100%; display:block;"></video>
       </div>
-      <div style="display:flex; gap:10px; margin-top:8px;">
-        <button type="button" onclick="addBlurBox()" style="flex:1; padding:8px; background:var(--chalk); color:var(--ink); font-weight:bold; font-size:13px; border-radius:4px;">+ Προσθήκη Περιοχής Blur</button>
-        <button type="button" onclick="clearBlurBoxes()" style="flex:1; padding:8px; background:#d9534f; color:#fff; font-size:13px; border-radius:4px;">Καθαρισμός Blur</button>
-      </div>
-      <p style="font-size:12px; color:var(--sea); margin:6px 0;">*Πρόσθεσε περιοχές θολώματος πάνω στο βίντεο.</p>
       
-      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Σημεία Σίγασης Ήχου στο Βίντεο (Mute):</label>
-      <div id="videoMuteList" class="mute-list"></div>
-      <button onclick="addVideoMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Σημείου Mute</button>
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Διαστήματα Ολικού Blur & Mute (Tαυτόχρονα):</label>
+      <div id="videoBlurMuteList" class="mute-list"></div>
+      <button onclick="addVideoBlurMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Διαστήματος (Blur & Mute)</button>
     </div>
 
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
@@ -208,7 +198,6 @@
     <div id="processingOverlay">
       <h3 style="margin:0 0 10px;">Γίνεται επεξεργασία...</h3>
       <p style="font-size:14px; margin:0; margin-bottom:15px;">Το αρχείο καταγράφεται τοπικά. Παρακαλώ περιμένετε.</p>
-      <!-- Κουμπί Ακύρωσης Επεξεργασίας -->
       <button type="button" id="cancelProcessBtn" style="padding:10px 20px; background:#d9534f; color:#fff; font-weight:bold; border-radius:4px;">Ακύρωση Διαδικασίας</button>
     </div>
   </div>
@@ -232,9 +221,7 @@
 
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης.' },
-    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106633, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' },
-    { id: 'sapfous', title: 'Taxi', subtitle: 'Παραλιακή', lat: 39.106616, lon: 26.557257, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' },  
-    { id: 'sapfous', title: 'Inpspot', subtitle: 'Παραλιακή', lat: 39.107455, lon: 26.558099, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' } 
+    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
   ];
 
   var SMOOTHING = 0.1, MIN_DIST = 2, Y_OFF = 1.2;
@@ -423,19 +410,15 @@
   });
 
   // ==========================================
-  // 2. ΕΠΕΞΕΡΓΑΣΤΗΣ (ΠΟΛΛΑΠΛΑ BLUR & CANCEL PROCESS)
+  // 2. ΕΠΕΞΕΡΓΑΣΤΗΣ (ΟΛΙΚΟ BLUR & MUTE ΔΙΑΣΤΗΜΑΤΑ)
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
   var currentObjectURL = null;
-  var activeRecorder = null; // Για το Cancel button
+  var activeRecorder = null; 
 
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d'), imgObj = null, isDrawing = false;
   var imageHistory = []; 
-  
-  var vContainer = $('videoContainer'), blurBoxesWrapper = $('blurBoxesWrapper');
-  var activeBlurBox = null;
-  var isDraggingBox = false, startDrag = {x:0,y:0};
 
   window.addAudioMuteRow = function() {
     var div = document.createElement('div'); div.className = 'mute-item';
@@ -445,51 +428,12 @@
     $('audioMuteList').appendChild(div);
   };
 
-  window.addVideoMuteRow = function() {
+  window.addVideoBlurMuteRow = function() {
     var div = document.createElement('div'); div.className = 'mute-item';
-    div.innerHTML = `Από: <input type="number" step="1" min="0" class="vmute-start">s 
-                     Έως: <input type="number" step="1" min="0" class="vmute-end">s 
+    div.innerHTML = `Από: <input type="number" step="1" min="0" class="vbm-start">s 
+                     Έως: <input type="number" step="1" min="0" class="vbm-end">s 
                      <button onclick="this.parentElement.remove()" style="color:red; background:none; font-weight:bold;">X</button>`;
-    $('videoMuteList').appendChild(div);
-  };
-
-  // Δυναμική προσθήκη πολλαπλών περιοχών Blur στο βίντεο
-  window.addBlurBox = function() {
-    var box = document.createElement('div');
-    box.className = 'blur-box-elem';
-    box.style.left = '20px';
-    box.style.top = '20px';
-    box.style.width = '100px';
-    box.style.height = '100px';
-    box.style.pointerEvents = 'auto';
-    
-    // Δυνατότητα μετακίνησης και resizing με απλό drag
-    box.onpointerdown = function(e) {
-      e.stopPropagation();
-      activeBlurBox = box;
-      var startX = e.clientX, startY = e.clientY;
-      var origX = parseInt(box.style.left), origY = parseInt(box.style.top);
-      
-      function onMove(me) {
-        box.style.left = (origX + (me.clientX - startX)) + 'px';
-        box.style.top = (origY + (me.clientY - startY)) + 'px';
-      }
-      function onUp() {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-      }
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    };
-
-    // Διπλό κλικ για διαγραφή περιοχής
-    box.ondblclick = function() { box.remove(); };
-
-    blurBoxesWrapper.appendChild(box);
-  };
-
-  window.clearBlurBoxes = function() {
-    blurBoxesWrapper.innerHTML = '';
+    $('videoBlurMuteList').appendChild(div);
   };
 
   window.cancelStory = function() {
@@ -514,9 +458,8 @@
     $('imageEditor').style.display = 'none'; 
     $('videoEditor').style.display = 'none'; 
     $('audioEditor').style.display = 'none';
-    blurBoxesWrapper.innerHTML = '';
     $('audioMuteList').innerHTML = '';
-    $('videoMuteList').innerHTML = '';
+    $('videoBlurMuteList').innerHTML = '';
     
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(currentFile);
@@ -531,7 +474,7 @@
     else if(currentFile.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block'; 
       var vid = $('videoPreview'); vid.src = currentObjectURL;
-      window.addVideoMuteRow();
+      window.addVideoBlurMuteRow();
     }
     else if(currentFile.type.startsWith('audio/')) {
       $('audioEditor').style.display = 'block'; 
@@ -543,7 +486,7 @@
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
+    return { x: (cX - rect.left)*scaleX, y: (clientY - rect.top)*scaleY };
   }
   function drawBlur(pos) { 
     ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); 
@@ -598,7 +541,6 @@
     }
   };
 
-  // Κουμπί Ακύρωσης Διαδικασίας (Cancel Process)
   $('cancelProcessBtn').onclick = function() {
     if (activeRecorder && activeRecorder.state === 'recording') {
       activeRecorder.stop();
@@ -667,48 +609,32 @@
     $('previewSheet').classList.remove('on');
   };
 
-  // --- Επεξεργαστής Βίντεο: Πολλαπλά Blur Boxes & Mute ---
+  // --- Επεξεργαστής Βίντεο: Ολικό Blur & Mute σε επιλεγμένα χρονικά διαστήματα ---
   function processVideoLocal(file) {
     return new Promise((resolve) => {
       var video = $('videoPreview'), oCanvas = document.createElement('canvas'), oCtx = oCanvas.getContext('2d');
-      var blurCanvas = document.createElement('canvas'), blurCtx = blurCanvas.getContext('2d');
-      
-      var vRect = video.getBoundingClientRect();
-      var boxElements = document.querySelectorAll('.blur-box-elem');
-      var boxesData = [];
-      
-      boxElements.forEach(el => {
-        var b = el.getBoundingClientRect();
-        boxesData.push({
-          x: (b.left - vRect.left) / vRect.width,
-          y: (b.top - vRect.top) / vRect.height,
-          w: b.width / vRect.width,
-          h: b.height / vRect.height
-        });
-      });
-
       oCanvas.width = video.videoWidth; oCanvas.height = video.videoHeight;
-      blurCanvas.width = video.videoWidth; blurCanvas.height = video.videoHeight;
       
       var canvasStream = oCanvas.captureStream(30), finalStream = canvasStream;
       
-      var vmRanges = [];
-      document.querySelectorAll('.vmute-start').forEach((sInput, idx) => {
-        var eInput = document.querySelectorAll('.vmute-end')[idx];
+      var ranges = [];
+      document.querySelectorAll('.vbm-start').forEach((sInput, idx) => {
+        var eInput = document.querySelectorAll('.vbm-end')[idx];
         if(sInput && eInput) {
           var s = parseFloat(sInput.value), end = parseFloat(eInput.value);
-          if(!isNaN(s) && !isNaN(end) && end>s) vmRanges.push({s:s, e:end});
+          if(!isNaN(s) && !isNaN(end) && end>s) ranges.push({s:s, e:end});
         }
       });
 
-      var aCtx = null, src = null;
+      var aCtx = null;
       try {
         aCtx = new (window.AudioContext || window.webkitAudioContext)();
-        src = aCtx.createMediaElementSource(video);
+        var src = aCtx.createMediaElementSource(video);
         var gainNode = aCtx.createGain();
         gainNode.gain.setValueAtTime(1, 0);
         
-        vmRanges.forEach(r => {
+        // Μηδενισμός έντασης στα καθορισμένα διαστήματα
+        ranges.forEach(r => {
           gainNode.gain.setValueAtTime(1, Math.max(0, r.s-0.01));
           gainNode.gain.setValueAtTime(0, r.s);
           gainNode.gain.setValueAtTime(0, r.e);
@@ -734,27 +660,24 @@
         if (chunks.length > 0) {
           resolve(new Blob(chunks, {type: 'video/webm'}));
         } else {
-          resolve(null); // Ακυρώθηκε
+          resolve(null); 
         }
       };
       
       function drawFrame() {
         if(video.paused || video.ended) return;
         
-        blurCtx.filter = 'blur(20px)';
-        blurCtx.drawImage(video, 0, 0, blurCanvas.width, blurCanvas.height);
+        var currentTime = video.currentTime;
+        // Ελέγχουμε αν το τρέχον δευτερόλεπτο εμπίπτει σε κάποιο από τα ranges για ολικό blur
+        var isBlurred = ranges.some(r => currentTime >= r.s && currentTime <= r.e);
         
+        oCtx.clearRect(0, 0, oCanvas.width, oCanvas.height);
+        if (isBlurred) {
+          oCtx.filter = 'blur(20px)';
+        } else {
+          oCtx.filter = 'none';
+        }
         oCtx.drawImage(video, 0, 0, oCanvas.width, oCanvas.height);
-        
-        // Εφαρμογή όλων των blur boxes
-        boxesData.forEach(box => {
-          oCtx.save();
-          oCtx.beginPath();
-          oCtx.rect(box.x * oCanvas.width, box.y * oCanvas.height, box.w * oCanvas.width, box.h * oCanvas.height);
-          oCtx.clip();
-          oCtx.drawImage(blurCanvas, 0, 0);
-          oCtx.restore();
-        });
 
         requestAnimationFrame(drawFrame);
       }
