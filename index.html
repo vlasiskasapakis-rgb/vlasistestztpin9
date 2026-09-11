@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>Διαδρομή μνήμης — Μυτιλήνη (Fast Local Editor)</title>
+<title>Διαδρομή μνήμης — Μυτιλήνη (AR & Fast Local Editor)</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
@@ -171,12 +171,11 @@
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
-    <!-- ΒΙΝΤΕΟ (Γρήγορος Editor με Metadata) -->
     <div id="videoEditor" class="editor-box" style="background:#fff;">
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline style="width:100%; display:block;"></video>
       </div>
-      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Διαστήματα Ολικού Blur & Mute (Ακαριαία):</label>
+      <label style="font-size:14px; font-weight:600; color:var(--sea); display:block; margin-top:10px;">Διαστήματα Ολικού Blur & Mute:</label>
       <div id="videoBlurMuteList" class="mute-list"></div>
       <button onclick="addVideoBlurMuteRow()" style="padding:8px 12px; background:var(--chalk); color:var(--ink); font-size:13px; border-radius:4px;">+ Προσθήκη Διαστήματος</button>
     </div>
@@ -211,9 +210,14 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
+  // ΕΠΑΝΕΦΕΡΑΜΕ ΟΛΑ ΤΑ ΑΡΧΙΚΑ ΣΗΜΕΙΑ (STORIES)
   var STORIES = [
-    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης.' },
-    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
+    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού, παλιά αγορά', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης, σημείο αναφοράς.' },
+    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης στο λιμάνι.' },
+    { id: 'mitropoli', title: 'Μητρόπολη', subtitle: 'Άγιος Αθανάσιος', lat: 39.108346, lon: 26.557850, radius: 30, text: 'Ο Μητροπολιτικός Ναός, κρυμμένος στα στενά.' },
+    { id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Οδός Ερμού (Βόρεια)', lat: 39.110373, lon: 26.557807, radius: 30, text: 'Το παλιό οθωμανικό τέμενος της αγοράς.' },
+    { id: 'ika', title: 'ΙΚΑ', subtitle: 'Ναυμαχίας Έλλης, Επάνω Σκάλα', lat: 39.11180, lon: 26.55660, radius: 40, text: 'Σημαντικό κτίριο στην περιοχή της Επάνω Σκάλας.' },
+    { id: 'faneromeni', title: 'Παναγία Φανερωμένη', subtitle: 'Ερμού', lat: 39.110015, lon: 26.558099, radius: 40, text: 'Η ιστορική εκκλησία της Παναγίας Φανερωμένης.' }
   ];
 
   var SMOOTHING = 0.1, MIN_DIST = 2, Y_OFF = 1.2;
@@ -375,7 +379,7 @@
   function onPosition(pos) {
     me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
     updateARLabels(); updateMap();
-    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(me.heading || 0)}°`);
+    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(window.currentHeading)}°`);
     
     $('addBtn').classList.add('on');
     $('locDisplay').textContent = `${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}`;
@@ -402,7 +406,7 @@
   });
 
   // ==========================================
-  // 2. FAST LOCAL EDITOR (ΑΚΑΡΙΑΙΑ ΑΠΟΘΗΚΕΥΣΗ)
+  // 2. FAST LOCAL EDITOR
   // ==========================================
   var processedFiles = []; 
   var currentFile = null;
@@ -473,11 +477,10 @@
     }
   };
 
-  // Blur Εικόνας & Undo
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
     var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cX - rect.left)*scaleX, y: (clientY - rect.top)*scaleY };
+    return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
   }
   function drawBlur(pos) { 
     ctx.save(); ctx.beginPath(); ctx.arc(pos.x, pos.y, 40, 0, Math.PI*2); ctx.clip(); 
@@ -507,14 +510,12 @@
     $('uploadSheet').classList.add('on');
   };
 
-  // ΑΚΑΡΙΑΙΑ ΑΠΟΘΗΚΕΥΣΗ (Χωρίς Recording/Rendering)
   $('saveFileBtn').onclick = async function() {
     try {
       if (currentFile.type.startsWith('image/')) {
         processedFiles.push({ name: currentFile.name, type: 'image/jpeg', dataURL: canvas.toDataURL('image/jpeg', 0.8) });
       } 
       else if (currentFile.type.startsWith('video/')) {
-        // Μαζεύουμε τα διαστήματα blur/mute για να τα αποθηκεύσουμε ως metadata μαζί με το αρχείο
         var ranges = [];
         document.querySelectorAll('.vbm-start').forEach((sInput, idx) => {
           var eInput = document.querySelectorAll('.vbm-end')[idx];
@@ -523,7 +524,6 @@
             if(!isNaN(s) && !isNaN(end) && end>s) ranges.push({s:s, e:end});
           }
         });
-        // Σώζουμε το αρχικό αρχείο βίντεο και τις ρυθμίσεις του ακαριαία!
         processedFiles.push({ name: currentFile.name, type: currentFile.type, blob: currentFile, blurRanges: ranges });
       }
       else if (currentFile.type.startsWith('audio/')) {
