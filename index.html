@@ -339,7 +339,6 @@
     }
   });
 
-  // Ειδικό component για να διορθώσουμε τη φορά των 3D entities στο iOS
   AFRAME.registerComponent('ios-ar-fix', {
     tick: function() {
       var cam = this.el.sceneEl && this.el.sceneEl.camera;
@@ -496,7 +495,7 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με iOS-safe Blur)
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ & ΗΧΟΓΡΑΦΗΣΗ
   // ==========================================
   var MAX_IMAGE_W = 1600;  
   var MAX_VIDEO_W = 640;     
@@ -519,7 +518,6 @@
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  // --- Ενημέρωση Timeline Βίντεο ---
   function updateVideoTimeline() {
     var timeline = $('videoTimeline');
     if (!timeline) return;
@@ -546,7 +544,6 @@
     });
   }
 
-  // --- Ενημέρωση Timeline Ήχου ---
   function updateAudioTimeline() {
     var timeline = $('audioTimeline');
     if (!timeline) return;
@@ -572,7 +569,6 @@
     });
   }
 
-  // --- Διαχείριση Σημείων Ήχου (Stamps) ---
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
     div.innerHTML = `Από: <input type="number" step="0.1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
@@ -594,7 +590,6 @@
   $('audioMuteList').addEventListener('input', function() { updateAudioTimeline(); });
   $('audioMuteList').addEventListener('change', function() { updateAudioTimeline(); });
 
-  // --- Διαστήματα Βίντεο (Stamps) ---
   function addVideoRangeRow(start, end, mute, blur) {
     var div = document.createElement('div'); div.className = 'range-item';
     div.innerHTML =
@@ -657,32 +652,63 @@
   $('addBtn').onclick = () => { if(me) { $('uploadSheet').classList.add('on'); setAR(false); } };
   $('triggerFileBtn').onclick = () => $('singleFileInput').click();
 
-  // --- ΖΩΝΤΑΝΗ ΗΧΟΓΡΑΦΗΣΗ ΑΡΧΕΙΟΥ ---
+  // --- ΔΙΟΡΘΩΜΕΝΗ ΖΩΝΤΑΝΗ ΗΧΟΓΡΑΦΗΣΗ (iOS-compatible) ---
   var mediaRecorder = null;
   var audioChunks = [];
   var recTimerInterval = null;
   var recSeconds = 0;
+  var recordingStream = null;
 
   $('recordAudioBtn').onclick = async function() {
     try {
-      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true } 
+      });
       audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
+
+      // Επιλογή υποστηριζόμενου MIME type για iOS Safari ή άλλους browsers
+      var mimeType = '';
+      var possibleTypes = [
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus'
+      ];
+      
+      for (var i = 0; i < possibleTypes.length; i++) {
+        if (MediaRecorder.isTypeSupported(possibleTypes[i])) {
+          mimeType = possibleTypes[i];
+          break;
+        }
+      }
+
+      var options = mimeType ? { mimeType: mimeType } : {};
+      mediaRecorder = new MediaRecorder(recordingStream, options);
 
       mediaRecorder.ondataavailable = function(e) {
-        if (e.data && e.data.size > 0) audioChunks.push(e.data);
+        if (e.data && e.data.size > 0) {
+          audioChunks.push(e.data);
+        }
       };
 
       mediaRecorder.onstop = function() {
-        stream.getTracks().forEach(track => track.stop());
-        
-        var audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        var fileName = "ηχογράφηση_" + new Date().toISOString().slice(0,10) + ".wav";
-        var recordedFile = new File([audioBlob], fileName, { type: 'audio/wav' });
+        if (recordingStream) {
+          recordingStream.getTracks().forEach(track => track.stop());
+          recordingStream = null;
+        }
+
+        var finalMime = mediaRecorder.mimeType || 'audio/mp4';
+        var audioBlob = new Blob(audioChunks, { type: finalMime });
+        var ext = finalMime.includes('webm') ? 'webm' : 'm4a';
+        var fileName = "ηχογράφηση_" + new Date().toISOString().slice(0,10) + "." + ext;
+        var recordedFile = new File([audioBlob], fileName, { type: finalMime });
 
         $('recorderModal').classList.remove('on');
         loadFileIntoEditor(recordedFile, null);
       };
+
+      // Ξεκινάμε την εγγραφή ζητώντας chunks ανά 250ms για να αποτρέψουμε απώλεια δεδομένων στο iOS
+      mediaRecorder.start(250);
 
       $('recorderModal').classList.add('on');
       recSeconds = 0;
@@ -695,9 +721,8 @@
         $('recStatusTimer').textContent = m + ":" + s;
       }, 1000);
 
-      mediaRecorder.start();
     } catch (err) {
-      alert("Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο: " + (err.message || err));
+      alert("Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο (βεβαιωθείτε ότι επιτρέψατε την πρόσβαση): " + (err.message || err));
     }
   };
 
@@ -711,13 +736,15 @@
   $('cancelRecBtn').onclick = function() {
     clearInterval(recTimerInterval);
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
       mediaRecorder.stop();
+    }
+    if (recordingStream) {
+      recordingStream.getTracks().forEach(track => track.stop());
+      recordingStream = null;
     }
     $('recorderModal').classList.remove('on');
   };
 
-  // Φόρτωση αρχείου στον editor
   function loadFileIntoEditor(file, savedMeta) {
     currentFile = file;
     setAR(false);
@@ -777,7 +804,7 @@
         updateVideoTimeline();
       };
     }
-    else if(file.type.startsWith('audio/')) {
+    else if(file.type.startsWith('audio/') || file.name.endsWith('.m4a') || file.name.endsWith('.wav')) {
       $('audioEditor').style.display = 'block';
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
@@ -842,7 +869,7 @@
       var savedMeta = { ranges: [] };
       if (currentFile.type.startsWith('video/')) {
         savedMeta.ranges = readVideoRanges();
-      } else if (currentFile.type.startsWith('audio/')) {
+      } else if (currentFile.type.startsWith('audio/') || currentFile.name.endsWith('.m4a') || currentFile.name.endsWith('.wav')) {
         document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
           var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
           if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
@@ -857,9 +884,9 @@
         var vblob = await processVideoLocal(currentFile);
         processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
       }
-      else if (currentFile.type.startsWith('audio/')) {
+      else {
         var ablob = await processAudioLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: ablob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, type: ablob.type || 'audio/mp4', blob: ablob, meta: savedMeta });
       }
       updateMediaListUI();
     } catch (e) {
@@ -922,7 +949,7 @@
         itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">`;
       } else if (f.type.startsWith('video/')) {
         itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>`;
-      } else if (f.type.startsWith('audio/')) {
+      } else {
         itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
       }
       
@@ -962,25 +989,14 @@
     setAR(true);
   };
 
-  // --- Επεξεργαστής Βίντεο ---
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
       setAR(false);
-
       var video = $('videoPreview');
       var ranges = readVideoRanges();
 
-      if (ranges.length === 0) { 
-        setAR(true); 
-        resolve(file); 
-        return; 
-      }
-
-      if (!window.MediaRecorder) { 
-        setAR(true);
-        resolve(file); 
-        return; 
-      }
+      if (ranges.length === 0) { setAR(true); resolve(file); return; }
+      if (!window.MediaRecorder) { setAR(true); resolve(file); return; }
       
       var mime = [
         'video/webm;codecs=vp9,opus',
@@ -990,11 +1006,7 @@
         'video/webm'
       ].filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
       
-      if (!mime) { 
-        setAR(true);
-        reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); 
-        return; 
-      }
+      if (!mime) { setAR(true); reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); return; }
 
       var blurRanges = ranges.filter(function (r) { return r.blur; });
       var muteRanges = ranges.filter(function (r) { return r.mute; });
@@ -1047,7 +1059,6 @@
         try { video.pause(); } catch (e) {}
         video.onended = null;
         try { audioCtx.close(); } catch(e){}
-        
         setAR(true);
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
@@ -1133,7 +1144,6 @@
     });
   }
 
-  // --- Επεξεργαστής Ήχου ---
   function processAudioLocal(file) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
