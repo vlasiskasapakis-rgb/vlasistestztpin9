@@ -29,11 +29,31 @@
     font-size: 17px; line-height: 1.5;
   }
   button { font: inherit; cursor: pointer; border: 0; border-radius: 2px; }
-  img.labelsrc { display: none; }
 
   /* AR Scene - Πίσω από όλα */
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
+
+  /* Σταθερά HTML AR Markers (Overlay) */
+  #ar-overlay-container { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+  .ar-html-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: rgba(14, 42, 46, 0.92);
+    border-left: 6px solid var(--chalk);
+    color: var(--bone);
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    pointer-events: auto;
+    cursor: pointer;
+    min-width: 220px;
+    text-align: left;
+    transition: transform 0.1s ease-out;
+  }
+  .ar-html-marker .m-title { display: block; font-size: 18px; font-weight: 700; color: var(--bone); }
+  .ar-html-marker .m-sub { display: block; font-size: 13px; color: var(--sea); margin-bottom: 4px; }
+  .ar-html-marker .m-dist { display: block; font-size: 15px; font-weight: 600; color: var(--chalk); }
 
   /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
@@ -135,7 +155,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -146,6 +166,9 @@
   <div id="status">Αναμονή για στίγμα…</div>
   <button id="nearest"><span class="dist"></span><span class="name"></span></button>
 </div>
+
+<!-- HTML AR Overlays Container -->
+<div id="ar-overlay-container"></div>
 
 <!-- Κουμπί Νέας Ιστορίας -->
 <button id="addBtn" aria-label="Προσθήκη">+</button>
@@ -284,8 +307,7 @@
     { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
   ];
 
-  var MIN_DIST = 2, Y_OFF = 1.2;
-  var AR_CLUSTERS = [], CLUSTER_RADIUS_M = 50, CLUSTER_REVEAL_M = 80;
+  var MIN_DIST = 2;
   var me = null, map = null, meMarker = null, accCircle = null, followMe = true;
   window.currentHeading = null;
 
@@ -302,21 +324,6 @@
     var a = Math.sin(rad(lat2 - lat1)/2) * Math.sin(rad(lat2 - lat1)/2) + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1)/2) * Math.sin(rad(lon2 - lon1)/2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
-
-  var _camPos = new THREE.Vector3();
-  // Βελτιωμένο Billboard component για σταθερή, ευθεία προβολή προς την κάμερα
-  AFRAME.registerComponent('billboard', {
-    tick: function () {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      cam.getWorldPosition(_camPos);
-      var o = this.el.object3D;
-      o.lookAt(_camPos.x, o.position.y, _camPos.z);
-      // Αποτροπή κλίσης στον άξονα Z ώστε να μην φαίνονται ποτέ στραβά
-      o.rotation.x = 0;
-      o.rotation.z = 0;
-    }
-  });
 
   var _cameraDir = new THREE.Vector3();
   AFRAME.registerComponent('hud-compass', {
@@ -340,75 +347,36 @@
         degOut.textContent = Math.round(h) + '°';
       }
       applyHeadingToDot();
+      updateHTMLMarkersPosition();
     }
   });
 
-  // Μεγαλύτερος καμβάς υψηλής ανάλυσης για ευανάγνωστα γράμματα
-  function makeLabelImage(title, subtitle, distText, isCluster) {
-    var c = document.createElement('canvas'); c.width = 2400; c.height = 800; var g = c.getContext('2d'); g.scale(2,2);
-    g.fillStyle = isCluster ? 'rgba(14,42,46,0.96)' : 'rgba(14,42,46,0.92)'; 
-    g.fillRect(0,0,1200,400);
-    g.fillStyle = isCluster ? '#4E8C93' : '#F0C244'; 
-    g.fillRect(0,0,24,400);
-    
-    g.fillStyle = '#F2EDE4'; g.font = 'bold 84px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 70, 110);
-    g.fillStyle = '#8FC0C4'; g.font = '50px sans-serif'; g.fillText(subtitle, 70, 205);
-    
-    if (distText) {
-      g.fillStyle = '#F0C244'; g.font = 'bold 60px sans-serif'; g.fillText(distText, 70, 310);
-    }
-
-    var img = document.createElement('img'); img.className = 'labelsrc';
-    document.body.appendChild(img);
-    return { canvas: c, img: img };
-  }
-
-  function prepareARClusters() {
-    var assigned = {};
-    STORIES.forEach((s, i) => {
-      if(assigned[i]) return;
-      var c = { id: 'c-'+i, stories: [s], lat: s.lat, lon: s.lon }; assigned[i] = true;
-      STORIES.forEach((s2, j) => {
-        if(i!==j && !assigned[j] && distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
-          c.stories.push(s2); assigned[j] = true;
-        }
-      });
-      if(c.stories.length > 1) {
-        c.lat = c.stories.reduce((sum,st)=>sum+st.lat,0)/c.stories.length;
-        c.lon = c.stories.reduce((sum,st)=>sum+st.lon,0)/c.stories.length;
-        AR_CLUSTERS.push(c);
-      }
-    });
-  }
-
-  var labelDataRegistry = [];
-
+  // Δημιουργία HTML AR Markers στο DOM
   function buildScene() {
-    prepareARClusters();
-    labelDataRegistry = [];
-    var parts = [];
-
-    AR_CLUSTERS.forEach(c => {
-      var lObj = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', '', true);
-      lObj.img.id = 'img-' + c.id;
-      lObj.img.src = lObj.canvas.toDataURL();
-      labelDataRegistry.push({ type: 'cluster', id: c.id, lat: c.lat, lon: c.lon, canvas: lObj.canvas, img: lObj.img, titleBase: c.stories.length + ' Σημεία κοντά', subBase: 'Πλησίασε' });
-
-      // Μεγάλη σταθερή κλίμακα (scale) και πλάτος/ύψος για να φαίνονται πεντακάθαρα και μεγάλα
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="6 6 1"><a-plane width="5.5" height="1.8" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
-    });
+    var container = $('ar-overlay-container');
+    container.innerHTML = '';
 
     STORIES.forEach(s => {
-      var lObj = makeLabelImage(s.title, s.subtitle, '', false);
-      lObj.img.id = 'img-' + s.id;
-      lObj.img.src = lObj.canvas.toDataURL();
-      labelDataRegistry.push({ type: 'poi', id: s.id, lat: s.lat, lon: s.lon, canvas: lObj.canvas, img: lObj.img, titleBase: s.title, subBase: s.subtitle });
-
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="6 6 1"><a-plane width="5.5" height="1.8" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      var div = document.createElement('div');
+      div.className = 'ar-html-marker';
+      div.id = 'html-marker-' + s.id;
+      div.style.display = 'none';
+      div.innerHTML = `
+        <span class="m-title">${s.title}</span>
+        <span class="m-sub">${s.subtitle}</span>
+        <span class="m-dist" id="dist-${s.id}">Υπολογισμός...</span>
+      `;
+      div.onclick = () => {
+        $('sheetTitle').textContent = s.title;
+        $('sheetSub').textContent = s.subtitle;
+        $('sheetBody').textContent = s.text;
+        $('infoSheet').classList.add('on');
+      };
+      container.appendChild(div);
     });
 
-    parts.push(`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
-
+    // Dummy A-Frame Camera για την κίνηση των αισθητήρων
+    var parts = [`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`];
     var scene = document.createElement('a-scene');
     scene.setAttribute('hud-compass', ''); 
     scene.setAttribute('vr-mode-ui', 'enabled: false');
@@ -417,48 +385,44 @@
     document.body.appendChild(scene);
   }
 
-  function updateARLabels() {
-    if(!me) return;
-    
-    AR_CLUSTERS.forEach(c => {
-      var el = document.getElementById(c.id); if(!el) return;
-      var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
-      if(d < CLUSTER_REVEAL_M) el.setAttribute('visible', 'false');
-      else { 
-        el.setAttribute('visible', 'true'); 
-        updateLabelDistanceText(c.id, c.stories.length + ' Σημεία κοντά', 'Πλησίασε', d);
-      }
-    });
+  // Υπολογισμός γωνίας και προβολή των markers με σταθερό μέγεθος στην οθόνη
+  function updateHTMLMarkersPosition() {
+    if (!me || window.currentHeading === null) return;
+    var cam = document.querySelector('#cam');
+    if (!cam) return;
 
     STORIES.forEach(s => {
-      var el = document.querySelector(`.poi[data-id="${s.id}"]`); if(!el) return;
-      var parent = AR_CLUSTERS.find(c => c.stories.includes(s));
-      if(parent && distanceMetres(me.lat, me.lon, parent.lat, parent.lon) >= CLUSTER_REVEAL_M) { el.setAttribute('visible', 'false'); return; }
-      el.setAttribute('visible', 'true');
+      var markerEl = $('html-marker-' + s.id);
+      if (!markerEl) return;
+
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
-      updateLabelDistanceText(s.id, s.title, s.subtitle, d);
+      var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
+      $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
+
+      // Υπολογισμός γωνίας προς το Σημείο Ενδιαφέροντος (Bearing)
+      var rad = function(d) { return d * Math.PI / 180; };
+      var dLon = rad(s.lon - me.lon);
+      var y = Math.sin(dLon) * Math.cos(rad(s.lat));
+      var x = Math.cos(rad(me.lat)) * Math.sin(rad(s.lat)) - Math.sin(rad(me.lat)) * Math.cos(rad(s.lat)) * Math.cos(dLon);
+      var bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+      // Σύγκριση γωνίας bearing με την κάμερα (heading)
+      var angleDiff = bearing - window.currentHeading;
+      while (angleDiff < -180) angleDiff += 360;
+      while (angleDiff > 180) angleDiff -= 360;
+
+      // Εμφάνιση μόνο αν είναι εντός του οπτικού πεδίου (π.χ. +/- 70 μοίρες)
+      if (Math.abs(angleDiff) < 70) {
+        markerEl.style.display = 'block';
+        // Μετατροπή μοιρών σε pixels οθόνης
+        var screenX = window.innerWidth / 2 + (angleDiff / 70) * (window.innerWidth / 2);
+        var screenY = window.innerHeight / 2; // Σταθερά στο κέντρο καθέτως
+        markerEl.style.left = screenX + 'px';
+        markerEl.style.top = screenY + 'px';
+      } else {
+        markerEl.style.display = 'none';
+      }
     });
-  }
-
-  function updateLabelDistanceText(id, title, subtitle, distMeters) {
-    var reg = labelDataRegistry.find(r => r.id === id);
-    if (!reg) return;
-    
-    var distStr = 'Απόσταση: ' + (distMeters >= 1000 ? (distMeters/1000).toFixed(1) + ' km' : Math.round(distMeters) + ' m');
-    
-    var g = reg.canvas.getContext('2d');
-    g.clearRect(0, 0, 1200, 400);
-    g.fillStyle = reg.type === 'cluster' ? 'rgba(14,42,46,0.96)' : 'rgba(14,42,46,0.92)'; 
-    g.fillRect(0,0,1200,400);
-    g.fillStyle = reg.type === 'cluster' ? '#4E8C93' : '#F0C244'; 
-    g.fillRect(0,0,24,400);
-    
-    g.fillStyle = '#F2EDE4'; g.font = 'bold 84px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 70, 110);
-    g.fillStyle = '#8FC0C4'; g.font = '50px sans-serif'; g.fillText(subtitle, 70, 205);
-    
-    g.fillStyle = '#F0C244'; g.font = 'bold 60px sans-serif'; g.fillText(distStr, 70, 310);
-
-    reg.img.src = reg.canvas.toDataURL();
   }
 
   function initMap() {
@@ -508,7 +472,7 @@
 
   function onPosition(pos) {
     me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
-    updateARLabels(); updateMap();
+    updateMap();
     $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(window.currentHeading)}°`);
 
     $('addBtn').classList.add('on');
