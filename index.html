@@ -155,7 +155,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>44Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -257,14 +257,17 @@
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
-    <!-- Editor Ήχου ΜΕ ΕΝΣΩΜΑΤΩΜΕΝΟ PLAYER ΣΤΗΝ ΚΥΜΑΤΟΜΟΡΦΗ -->
+    <!-- Editor Ήχου ΜΕ ΕΝΣΩΜΑΤΩΜΕΝΟ PLAYER & ΧΡΟΝΟΜΕΤΡΟ -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
       <!-- Το native player κρύφτηκε -->
       <audio id="audioPreview" style="display:none;"></audio>
       
+      <!-- Μετρητής ακριβείας -->
+      <div id="aTimeNow" style="font-family:monospace; font-size:13px; color:var(--sea); margin-bottom:6px;">Τρέχον σημείο: 0.0s / 0.0s</div>
+
       <!-- Waveform & Player Container -->
       <div id="waveContainer" style="position:relative; width:100%; height:90px; background:#0A1F22; border-radius:6px; margin-bottom:10px; overflow:hidden; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-        <!-- Κυματομορφή -->
+        <!-- Κυματομορφή (με ενσωματωμένο grid και νούμερα) -->
         <canvas id="audioWaveCanvas" style="position:absolute; inset:0; width:100%; height:100%; display:block;"></canvas>
         
         <!-- Περιοχές Κοπής / Timeline -->
@@ -276,8 +279,8 @@
         <!-- Playhead (Λευκή Κάθετη Γραμμή) -->
         <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8); display:none;"></div>
 
-        <!-- Κουμπί Play/Pause (Custom) -->
-        <button id="wavePlayBtn" style="position:absolute; left:12px; bottom:12px; background:var(--chalk); color:var(--ink); border:none; border-radius:50%; width:38px; height:38px; font-size:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); z-index:5;">▶</button>
+        <!-- Κουμπί Play/Pause -->
+        <button id="wavePlayBtn" style="position:absolute; left:12px; bottom:8px; background:var(--chalk); color:var(--ink); border:none; border-radius:50%; width:38px; height:38px; font-size:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); z-index:5;">▶</button>
       </div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
@@ -644,7 +647,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     });
   }
 
-  // Σχεδίαση Κυματομορφής
+  // === Σχεδίαση Κυματομορφής (Waveform) με GRID δευτερολέπτων ===
   function drawWaveform(buffer) {
     var waveCanvas = $('audioWaveCanvas');
     var waveCtx = waveCanvas.getContext('2d');
@@ -658,19 +661,22 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     waveCanvas.width = width * dpr;
     waveCanvas.height = height * dpr;
     waveCtx.scale(dpr, dpr);
-
     waveCtx.clearRect(0, 0, width, height);
+
+    // Αφήνουμε χώρο (16px) στο επάνω μέρος για να γράφουμε τα δευτερόλεπτα
+    var topOffset = 16;
+    var waveHeight = height - topOffset;
     
-    // Κεντρική γραμμή
+    // Κεντρική γραμμή κυματομορφής
     waveCtx.fillStyle = 'rgba(78, 140, 147, 0.3)';
-    waveCtx.fillRect(0, height / 2 - 1, width, 2);
+    waveCtx.fillRect(0, topOffset + (waveHeight / 2) - 1, width, 2);
 
     // Χρώμα κυματομορφής
     waveCtx.fillStyle = '#F0C244'; 
 
     var data = buffer.getChannelData(0); 
     var step = Math.ceil(data.length / width);
-    var amp = height / 2;
+    var amp = waveHeight / 2;
 
     for (var i = 0; i < width; i++) {
       var min = 1.0;
@@ -682,14 +688,47 @@ window.addEventListener('deviceorientationabsolute', function(e) {
         if (datum < min) min = datum;
         if (datum > max) max = datum;
       }
-      var y1 = (1 + min) * amp;
-      var y2 = (1 + max) * amp;
+      var y1 = topOffset + (1 + min) * amp;
+      var y2 = topOffset + (1 + max) * amp;
       var h = Math.max(1, y2 - y1);
       waveCtx.fillRect(i, y1, 1, h);
     }
+
+    // --- Σχεδίαση Time Markers (Δευτερόλεπτα & Grid) ---
+    var duration = buffer.duration;
+    
+    // Υπολογισμός διαστήματος με βάση τη συνολική διάρκεια
+    var interval = 1; 
+    if (duration > 120) interval = 30;
+    else if (duration > 60) interval = 15;
+    else if (duration > 20) interval = 5;
+    else if (duration > 10) interval = 2;
+
+    waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; // Ανοιχτόχρωμο (bone)
+    waveCtx.font = '10px monospace';
+    waveCtx.textBaseline = 'top';
+
+    for (var t = 0; t <= duration; t += interval) {
+      var x = (t / duration) * width;
+      
+      // Ευθυγράμμιση ώστε τα νούμερα στα άκρα να μην κόβονται
+      if (x < 10) waveCtx.textAlign = 'left';
+      else if (x > width - 15) waveCtx.textAlign = 'right';
+      else waveCtx.textAlign = 'center';
+      
+      // Κείμενο
+      waveCtx.fillText(t + 's', x, 2);
+      
+      // Κάθετη γραμμή (Grid) πάνω στην κυματομορφή
+      waveCtx.fillStyle = 'rgba(242, 237, 228, 0.15)'; 
+      waveCtx.fillRect(x, topOffset - 2, 1, height - topOffset + 2);
+      
+      // Επαναφορά χρώματος για το επόμενο κείμενο
+      waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; 
+    }
   }
 
-  // === NΕΑ ΛΕΙΤΟΥΡΓΙΚΟΤΗΤΑ ΕΝΣΩΜΑΤΩΜΕΝΟΥ PLAYER (WAVEFORM PLAYBACK) ===
+  // === ΛΕΙΤΟΥΡΓΙΚΟΤΗΤΑ ΕΝΣΩΜΑΤΩΜΕΝΟΥ PLAYER ===
   
   $('wavePlayBtn').onclick = function(e) {
     e.stopPropagation(); // Να μην πιάσει το click το waveContainer
@@ -723,10 +762,13 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var playhead = $('audioPlayhead');
     var progress = $('audioProgressFill');
     if (this.duration) {
-      playhead.style.display = 'block';
       var pct = (this.currentTime / this.duration) * 100;
+      playhead.style.display = 'block';
       playhead.style.left = pct + '%';
       progress.style.width = pct + '%';
+      
+      // Ενημέρωση κειμένου χρονομέτρου 
+      $('aTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's / ' + this.duration.toFixed(1) + 's';
     }
   });
 
@@ -947,11 +989,13 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       // Άνοιγμα Ηχητικού Editor
       $('audioEditor').style.display = 'block';
       $('wavePlayBtn').textContent = '▶'; // Μηδενισμός του κουμπιού
+      $('aTimeNow').textContent = 'Φόρτωση ήχου...';
       
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
       aud.load();
       aud.onloadedmetadata = function() {
+        $('aTimeNow').textContent = 'Τρέχον σημείο: 0.0s / ' + aud.duration.toFixed(1) + 's';
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
           savedMeta.ranges.forEach(r => addAudioMuteRow(r.s, r.e));
         } else {
