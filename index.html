@@ -276,6 +276,9 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
+  // Ανίχνευση iOS για τη διόρθωση της πυξίδας κατά 180°
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   // ==========================================
   // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
   // ==========================================
@@ -310,7 +313,7 @@
       if (!cam) return;
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
-      o.lookAt(_camPos.x, o.position.y, _camPos.z);
+      o.lookAt(_camPos.x, o.position.y, o.position.z);
     }
   });
 
@@ -322,6 +325,11 @@
       cam.getWorldDirection(_cameraDir);
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
+
+      // Αν είναι iOS, διορθώνουμε την απόκλιση 180 μοιρών της κάμερας
+      if (isIOS) {
+        h = (h + 180) % 360;
+      }
 
       window.currentHeading = h;
       if (this.displayHeading === undefined) this.displayHeading = h;
@@ -339,14 +347,11 @@
     }
   });
 
-  // ΔΙΟΡΘΩΜΕΝΟ iOS AR FIX: Αποτροπή κόλλησης στην οθόνη και σωστή κλίμακα κόσμου
   AFRAME.registerComponent('ios-ar-fix', {
     tick: function() {
       var cam = this.el.sceneEl && this.el.sceneEl.camera;
       if (!cam) return;
-      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS) {
-        // Εξασφαλίζουμε ότι η κάμερα δεν αντιστρέφει τον κόσμο ανώμαλα
         this.el.object3D.matrixAutoUpdate = true;
       }
     }
@@ -413,7 +418,6 @@
       if(d < CLUSTER_REVEAL_M) el.setAttribute('visible', 'false');
       else { 
         el.setAttribute('visible', 'true'); 
-        // Δυναμική κλίμακα βάσει πραγματικής απόστασης μέτρων για να μην φαίνονται τεράστια/κολλημένα
         var scaleVal = Math.max(0.5, Math.min(5, d * 0.05));
         el.setAttribute('scale', scaleVal + ' ' + scaleVal + ' 1'); 
       }
