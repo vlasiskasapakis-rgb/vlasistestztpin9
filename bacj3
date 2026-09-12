@@ -131,7 +131,7 @@
   #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
   .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
   .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
-  .timeline-block.mute { background: rgba(217, 83, 79, 0.85); }
+  .timeline-block.mute { background: rgba(217, 83, 79, 0.55); }
 
   .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
   .range-item .rr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
@@ -155,7 +155,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2aΔιαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>44Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -257,14 +257,35 @@
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
-    <!-- Editor Ήχου -->
+    <!-- Editor Ήχου ΜΕ ΕΝΣΩΜΑΤΩΜΕΝΟ PLAYER & ΧΡΟΝΟΜΕΤΡΟ -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
-      <audio id="audioPreview" controls style="width:100%; margin-bottom:6px;"></audio>
-      <div id="audioTimeline" class="media-timeline" title="Timeline ήχου"></div>
+      <!-- Το native player κρύφτηκε -->
+      <audio id="audioPreview" style="display:none;"></audio>
+      
+      <!-- Μετρητής ακριβείας -->
+      <div id="aTimeNow" style="font-family:monospace; font-size:13px; color:var(--sea); margin-bottom:6px;">Τρέχον σημείο: 0.0s / 0.0s</div>
+
+      <!-- Waveform & Player Container -->
+      <div id="waveContainer" style="position:relative; width:100%; height:90px; background:#0A1F22; border-radius:6px; margin-bottom:10px; overflow:hidden; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+        <!-- Κυματομορφή (με ενσωματωμένο grid και νούμερα) -->
+        <canvas id="audioWaveCanvas" style="position:absolute; inset:0; width:100%; height:100%; display:block;"></canvas>
+        
+        <!-- Περιοχές Κοπής / Timeline -->
+        <div id="audioTimeline" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+        
+        <!-- Γραμμή Προόδου (Σκιώδες Φίλτρο Που Γεμίζει) -->
+        <div id="audioProgressFill" style="position:absolute; top:0; left:0; width:0%; height:100%; background:rgba(255,255,255,0.15); pointer-events:none;"></div>
+        
+        <!-- Playhead (Λευκή Κάθετη Γραμμή) -->
+        <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8); display:none;"></div>
+
+        <!-- Κουμπί Play/Pause -->
+        <button id="wavePlayBtn" style="position:absolute; left:12px; bottom:8px; background:var(--chalk); color:var(--ink); border:none; border-radius:50%; width:38px; height:38px; font-size:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); z-index:5;">▶</button>
+      </div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
       <div id="audioMuteList"></div>
-      <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη σημείου σίγασης</button>
+      <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px; margin-top:8px;">+ Προσθήκη σημείου σίγασης</button>
     </div>
 
     <div class="btn-row">
@@ -299,23 +320,51 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
-  // Ανίχνευση iOS για τη διόρθωση της απόκλισης 90 μοιρών
+  // Ανίχνευση iOS 
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Παγκόσμια μεταβλητή για τον πραγματικό Βορρά της συσκευής
+  window.hardwareHeading = null;
+
+  // 1. Για iOS (Safari): Παίρνουμε τον Βορρά από το webkitCompassHeading
+  window.addEventListener('deviceorientation', function(e) {
+    if (e.webkitCompassHeading !== undefined) {
+      window.hardwareHeading = e.webkitCompassHeading;
+    }
+  }, true);
+
+  // 2. Για Android (Chrome 50+): Πρέπει να χρησιμοποιήσουμε το event 'deviceorientationabsolute'
+window.addEventListener('deviceorientationabsolute', function(e) {
+  if (e.alpha !== null) {
+    var alpha = e.alpha ? e.alpha * Math.PI / 180 : 0;
+    var beta = e.beta ? e.beta * Math.PI / 180 : 0;
+    var gamma = e.gamma ? e.gamma * Math.PI / 180 : 0;
+
+    var cA = Math.cos(alpha), sA = Math.sin(alpha);
+    var cB = Math.cos(beta), sB = Math.sin(beta);
+    var cG = Math.cos(gamma), sG = Math.sin(gamma);
+
+    var vX = -cA * sG - sA * sB * cG;
+    var vY = -sA * sG + cA * sB * cG;
+
+    var heading = Math.atan2(vX, vY) * 180 / Math.PI;
+    if (heading < 0) heading += 360;
+
+    window.hardwareHeading = heading;
+  }
+}, true);
 
   // ==========================================
   // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
   // ==========================================
   var STORIES = [
-    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης με τον εντυπωσιακό τρούλο.' },
-    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης δίπλα στο λιμάνι.' },
-    { id: 'kastro', title: 'Κάστρο Μυτιλήνης', subtitle: 'Βόρειο Λιμάνι', lat: 39.111760, lon: 26.567080, radius: 50, text: 'Ένα από τα μεγαλύτερα κάστρα της Μεσογείου.' },
-    { id: 'ermou', title: 'Οδός Ερμού', subtitle: 'Εμπορικός Δρόμος', lat: 39.110420, lon: 26.557470, radius: 30, text: 'Ο ιστορικός εμπορικός δρόμος με τα παλιά μαγαζιά.' },
-    { id: 'athanasios', title: 'Άγιος Αθανάσιος', subtitle: 'Μητρόπολη', lat: 39.103850, lon: 26.553900, radius: 35, text: 'Ιστορικός ναός με εντυπωσιακό ξυλόγλυπτο τέμπλο.' },
-    { id: 'theatro', title: 'Αρχαίο Θέατρο', subtitle: 'Αρχαία Πόλη', lat: 39.101200, lon: 26.548900, radius: 45, text: 'Το αρχαίο θέατρο Μυτιλήνης με θέα προς τη θάλασσα.' },
-    { id: 'eleftheria', title: 'Άγαλμα Ελευθερίας', subtitle: 'Λιμάνι', lat: 39.108500, lon: 26.559200, radius: 35, text: 'Το εμβληματικό άγαλμα που δεσπόζει στην είσοδο του λιμανιού.' },
-    { id: 'marina', title: 'Μαρίνα Μυτιλήνης', subtitle: 'Νότια Πλευρά', lat: 39.098400, lon: 26.562100, radius: 40, text: 'Μοντέρνα μαρίνα για σκάφη αναψυχής.' },
-    { id: 'dimarcheio', title: 'Δημαρχείο Μυτιλήνης', subtitle: 'Κέντρο', lat: 39.107200, lon: 26.555800, radius: 30, text: 'Το νεοκλασικό κτίριο του Δημαρχείου.' },
-    { id: 'ermos_park', title: 'Πάρκο Χατζηγιάννη', subtitle: 'Κέντρο Πόλης', lat: 39.104500, lon: 26.551200, radius: 30, text: 'Καταπράσινο σημείο αναψυχής στο κέντρο.' }
+    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Κέντρο', lat: 39.106668, lon: 26.557367, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης δίπλα στο λιμάνι.' },
+    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105126, lon: 26.554749, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης με τον εντυπωσιακό τρούλο.' },
+    { id: 'mikrasiatisa', title: 'Μικρασιάτισσα Μάνα', subtitle: 'Επάνω Σκάλα', lat: 39.112350, lon: 26.557179, radius: 35, text: 'Το μνημείο που είναι αφιερωμένο στη Μικρασιάτισσα Μάνα.' },
+    { id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Επάνω Σκάλα', lat: 39.110375, lon: 26.557753, radius: 35, text: 'Το ιστορικό οθωμανικό τέμενος της Μυτιλήνης.' },
+    { id: 'agios_eudokimos', title: 'Άγιος Ευδόκιμος', subtitle: 'Ιστορικό Κέντρο', lat: 39.109996, lon: 26.556444, radius: 35, text: 'Ιστορικός ναός της πόλης.' },
+    { id: 'agalma', title: 'Άγαλμα Ελευθερίας', subtitle: 'Λιμάνι', lat: 39.105871, lon: 26.563128, radius: 40, text: 'Το εμβληματικό άγαλμα που δεσπόζει στην είσοδο του λιμανιού.' },
+    { id: 'kastro', title: 'Κάστρο Μυτιλήνης', subtitle: 'Βόρεια Πλευρά', lat: 39.111665, lon: 26.562324, radius: 50, text: 'Ένα από τα μεγαλύτερα κάστρα της Μεσογείου.' }
   ];
 
   var MIN_DIST = 2;
@@ -336,36 +385,30 @@
     return 2 * R * Math.asin(Math.sqrt(a));
   }
 
-  var _cameraDir = new THREE.Vector3();
   AFRAME.registerComponent('hud-compass', {
-    tick: function () {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      cam.getWorldDirection(_cameraDir);
-      var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
-      if (h < 0) h += 360;
+  tick: function () {
+    if (window.hardwareHeading === null) return;
+    var h = window.hardwareHeading;
+    window.currentHeading = h;
+    
+    if (this.displayHeading === undefined) this.displayHeading = h;
+    
+    var diff = h - (this.displayHeading % 360);
+    if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
+    
+    this.displayHeading += diff * 0.1; 
 
-      // Αν είναι iOS, διορθώνουμε την απόκλιση των 90 μοιρών
-      if (isIOS) {
-        h = (h + 90) % 360;
-      }
-
-      window.currentHeading = h;
-      if (this.displayHeading === undefined) this.displayHeading = h;
-      var diff = h - (this.displayHeading % 360);
-      if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
-      this.displayHeading += diff;
-
-      var needle = document.querySelector('#compass .needle');
-      var degOut = document.querySelector('#compass .deg');
-      if (needle) {
-        needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
-        degOut.textContent = Math.round(h) + '°';
-      }
-      applyHeadingToDot();
-      updateHTMLMarkersPosition();
+    var needle = document.querySelector('#compass .needle');
+    var degOut = document.querySelector('#compass .deg');
+    if (needle) {
+      needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
+      degOut.textContent = Math.round(this.displayHeading % 360) + '°';
     }
-  });
+    
+    applyHeadingToDot();
+    updateHTMLMarkersPosition();
+  }
+});
 
   function buildScene() {
     var container = $('ar-overlay-container');
@@ -578,6 +621,7 @@
     });
   }
 
+  // --- LOGIC ΓΙΑ ΤΟ AUDIO TIMELINE ---
   function updateAudioTimeline() {
     var timeline = $('audioTimeline');
     if (!timeline) return;
@@ -602,6 +646,131 @@
       timeline.appendChild(block);
     });
   }
+
+  // === Σχεδίαση Κυματομορφής (Waveform) με GRID δευτερολέπτων ===
+  function drawWaveform(buffer) {
+    var waveCanvas = $('audioWaveCanvas');
+    var waveCtx = waveCanvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = waveCanvas.getBoundingClientRect();
+    
+    // Ασφάλεια αν το UI δεν έχει προλάβει να ανανεώσει τις διαστάσεις
+    var width = rect.width || waveCanvas.parentElement.clientWidth || 300;
+    var height = rect.height || 90;
+
+    waveCanvas.width = width * dpr;
+    waveCanvas.height = height * dpr;
+    waveCtx.scale(dpr, dpr);
+    waveCtx.clearRect(0, 0, width, height);
+
+    // Αφήνουμε χώρο (16px) στο επάνω μέρος για να γράφουμε τα δευτερόλεπτα
+    var topOffset = 16;
+    var waveHeight = height - topOffset;
+    
+    // Κεντρική γραμμή κυματομορφής
+    waveCtx.fillStyle = 'rgba(78, 140, 147, 0.3)';
+    waveCtx.fillRect(0, topOffset + (waveHeight / 2) - 1, width, 2);
+
+    // Χρώμα κυματομορφής
+    waveCtx.fillStyle = '#F0C244'; 
+
+    var data = buffer.getChannelData(0); 
+    var step = Math.ceil(data.length / width);
+    var amp = waveHeight / 2;
+
+    for (var i = 0; i < width; i++) {
+      var min = 1.0;
+      var max = -1.0;
+      var start = i * step;
+      var end = Math.min(start + step, data.length);
+      for (var j = start; j < end; j++) {
+        var datum = data[j];
+        if (datum < min) min = datum;
+        if (datum > max) max = datum;
+      }
+      var y1 = topOffset + (1 + min) * amp;
+      var y2 = topOffset + (1 + max) * amp;
+      var h = Math.max(1, y2 - y1);
+      waveCtx.fillRect(i, y1, 1, h);
+    }
+
+    // --- Σχεδίαση Time Markers (Δευτερόλεπτα & Grid) ---
+    var duration = buffer.duration;
+    
+    // Υπολογισμός διαστήματος με βάση τη συνολική διάρκεια
+    var interval = 1; 
+    if (duration > 120) interval = 30;
+    else if (duration > 60) interval = 15;
+    else if (duration > 20) interval = 5;
+    else if (duration > 10) interval = 2;
+
+    waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; // Ανοιχτόχρωμο (bone)
+    waveCtx.font = '10px monospace';
+    waveCtx.textBaseline = 'top';
+
+    for (var t = 0; t <= duration; t += interval) {
+      var x = (t / duration) * width;
+      
+      // Ευθυγράμμιση ώστε τα νούμερα στα άκρα να μην κόβονται
+      if (x < 10) waveCtx.textAlign = 'left';
+      else if (x > width - 15) waveCtx.textAlign = 'right';
+      else waveCtx.textAlign = 'center';
+      
+      // Κείμενο
+      waveCtx.fillText(t + 's', x, 2);
+      
+      // Κάθετη γραμμή (Grid) πάνω στην κυματομορφή
+      waveCtx.fillStyle = 'rgba(242, 237, 228, 0.15)'; 
+      waveCtx.fillRect(x, topOffset - 2, 1, height - topOffset + 2);
+      
+      // Επαναφορά χρώματος για το επόμενο κείμενο
+      waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; 
+    }
+  }
+
+  // === ΛΕΙΤΟΥΡΓΙΚΟΤΗΤΑ ΕΝΣΩΜΑΤΩΜΕΝΟΥ PLAYER ===
+  
+  $('wavePlayBtn').onclick = function(e) {
+    e.stopPropagation(); // Να μην πιάσει το click το waveContainer
+    var aud = $('audioPreview');
+    if (aud.paused) aud.play();
+    else aud.pause();
+  };
+
+  $('waveContainer').onclick = function(e) {
+    if (e.target.id === 'wavePlayBtn') return;
+    var aud = $('audioPreview');
+    if (!aud.duration) return;
+    
+    var rect = this.getBoundingClientRect();
+    var clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+    var pct = (clientX - rect.left) / rect.width;
+    
+    // Κάνουμε seeking βάσει του που έκανε κλικ ο χρήστης
+    aud.currentTime = pct * aud.duration;
+  };
+
+  $('audioPreview').addEventListener('play', function() {
+    $('wavePlayBtn').textContent = '⏸';
+  });
+
+  $('audioPreview').addEventListener('pause', function() {
+    $('wavePlayBtn').textContent = '▶';
+  });
+
+  $('audioPreview').addEventListener('timeupdate', function () {
+    var playhead = $('audioPlayhead');
+    var progress = $('audioProgressFill');
+    if (this.duration) {
+      var pct = (this.currentTime / this.duration) * 100;
+      playhead.style.display = 'block';
+      playhead.style.left = pct + '%';
+      progress.style.width = pct + '%';
+      
+      // Ενημέρωση κειμένου χρονομέτρου 
+      $('aTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's / ' + this.duration.toFixed(1) + 's';
+    }
+  });
 
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
@@ -817,11 +986,16 @@
       };
     }
     else {
+      // Άνοιγμα Ηχητικού Editor
       $('audioEditor').style.display = 'block';
+      $('wavePlayBtn').textContent = '▶'; // Μηδενισμός του κουμπιού
+      $('aTimeNow').textContent = 'Φόρτωση ήχου...';
+      
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
       aud.load();
       aud.onloadedmetadata = function() {
+        $('aTimeNow').textContent = 'Τρέχον σημείο: 0.0s / ' + aud.duration.toFixed(1) + 's';
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
           savedMeta.ranges.forEach(r => addAudioMuteRow(r.s, r.e));
         } else {
@@ -829,6 +1003,20 @@
         }
         updateAudioTimeline();
       };
+
+      // Δημιουργία Κυματομορφής
+      var waveCanvas = $('audioWaveCanvas');
+      var waveCtx = waveCanvas.getContext('2d');
+      waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+      
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var aCtx = new (window.AudioContext || window.webkitAudioContext)();
+        aCtx.decodeAudioData(e.target.result, function(buffer) {
+          drawWaveform(buffer);
+        });
+      };
+      reader.readAsArrayBuffer(file);
     }
   }
 
@@ -841,9 +1029,11 @@
 
   function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-    var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
+    var cX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+    var cY = (e.touches && e.touches.length > 0) ? e.touches[0].clientY : e.clientY;
     return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
   }
+
   function drawBlur(pos) {
     var r = Math.max(24, canvas.width * 0.05);
     ctx.save();
@@ -851,16 +1041,39 @@
     ctx.drawImage(blurSrc, 0, 0);
     ctx.restore();
   }
-  canvas.onpointerdown = e => {
+
+  function handleDrawStart(e) {
+    e.preventDefault(); 
     isDrawing = true;
     imageHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     if (imageHistory.length > MAX_HISTORY) imageHistory.shift();
     drawBlur(getMousePos(e));
-    canvas.setPointerCapture(e.pointerId);
-  };
-  canvas.onpointermove = e => { if(isDrawing) drawBlur(getMousePos(e)); };
-  canvas.onpointerup = () => isDrawing = false;
-  canvas.onpointercancel = () => isDrawing = false;
+  }
+
+  function handleDrawMove(e) {
+    if (!isDrawing) return;
+    e.preventDefault(); 
+    drawBlur(getMousePos(e));
+  }
+
+  function handleDrawEnd(e) {
+    isDrawing = false;
+  }
+
+  canvas.onpointerdown = null;
+  canvas.onpointermove = null;
+  canvas.onpointerup = null;
+  canvas.onpointercancel = null;
+
+  canvas.addEventListener('touchstart', handleDrawStart, { passive: false });
+  canvas.addEventListener('touchmove', handleDrawMove, { passive: false });
+  canvas.addEventListener('touchend', handleDrawEnd);
+  canvas.addEventListener('touchcancel', handleDrawEnd);
+
+  canvas.addEventListener('mousedown', handleDrawStart);
+  canvas.addEventListener('mousemove', handleDrawMove);
+  canvas.addEventListener('mouseup', handleDrawEnd);
+  canvas.addEventListener('mouseleave', handleDrawEnd);
 
   $('undoBlurBtn').onclick = () => {
     if (imageHistory.length > 0) ctx.putImageData(imageHistory.pop(), 0, 0);
@@ -1169,7 +1382,7 @@
           var mRanges = [];
           document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
             var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.path({s:s, e:end});
+            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
           });
 
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
