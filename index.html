@@ -12,11 +12,12 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 
-<!-- ΔΙΟΡΘΩΣΗ 1: A-Frame 1.3.0 (δοκιμασμένο με AR.js 3.4.7) + ΜΟΝΟ το location-only build.
-     Το παλιό setup φόρτωνε ταυτόχρονα ar-threex-location-only.js ΚΑΙ aframe-ar.js,
-     που δημιουργούσε δύο ανταγωνιστικά DeviceOrientationControls -> κολλημένα markers στο iOS. -->
-<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/aframe/build/aframe-ar-location-only.js"></script>
+<!-- Ο επίσημος συνδυασμός για location-based AR (AR.js docs):
+     ar-threex-location-only.js = πυρήνας, aframe-ar.js = A-Frame wrapper.
+     ΚΑΙ ΤΑ ΔΥΟ χρειάζονται για να υπάρχουν τα gps-new-camera / gps-new-entity-place. -->
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/three.js/build/ar-threex-location-only.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/aframe/build/aframe-ar.js"></script>
 
 <style>
   :root {
@@ -139,7 +140,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>1Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -281,6 +282,10 @@
   var $ = function(id) { return document.getElementById(id); };
   var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // ΔΙΑΚΟΠΤΗΣ ΔΟΚΙΜΗΣ: true = arjs-look-controls (πυξίδα AR.js),
+  // false = default look-controls του A-Frame. Δοκίμασε και τα δύο στο iPhone.
+  var USE_ARJS_LOOK_CONTROLS = true;
 
   // ==========================================
   // 1. AR & ΧΑΡΤΗΣ
@@ -430,9 +435,11 @@
       parts.push('<a-entity class="poi" data-id="' + s.id + '" gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" material="src: #' + imgId + '; transparent: true; shader: flat; side: double"></a-plane></a-entity>');
     });
 
-    // ΔΙΟΡΘΩΣΗ 1γ: arjs-look-controls με smoothing — ο τεκμηριωμένος τρόπος
-    // για location-based AR. Χωρίς χειροκίνητο rotation override.
-    parts.push('<a-camera id="cam" gps-new-camera="gpsMinDistance: ' + MIN_DIST + '" arjs-look-controls="smoothingFactor: 0.1" rotation-reader></a-camera>');
+    // Αν τα markers δεν γυρίζουν στο iOS, άλλαξε το USE_ARJS_LOOK_CONTROLS
+    // στην κορυφή του script σε false για να δοκιμάσεις τα default look-controls.
+    var camAttrs = 'gps-new-camera="gpsMinDistance: ' + MIN_DIST + '"';
+    if (USE_ARJS_LOOK_CONTROLS) camAttrs += ' arjs-look-controls="smoothingFactor: 0.1"';
+    parts.push('<a-camera id="cam" ' + camAttrs + ' rotation-reader></a-camera>');
 
     var scene = document.createElement('a-scene');
     scene.setAttribute('hud-compass', '');
