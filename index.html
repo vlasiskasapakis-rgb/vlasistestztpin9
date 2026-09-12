@@ -49,11 +49,36 @@
     cursor: pointer;
     width: 180px;
     text-align: left;
-    transition: left 0.15s ease-out, top 0.15s ease-out;
+    transition: left 0.15s ease-out, top 0.15s ease-out, transform 0.2s, z-index 0.2s;
+    z-index: 10;
   }
   .ar-html-marker .m-title { display: block; font-size: 14px; font-weight: 700; color: var(--bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ar-html-marker .m-sub { display: block; font-size: 11px; color: var(--sea); margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ar-html-marker .m-dist { display: block; font-size: 12px; font-weight: 600; color: var(--chalk); }
+
+  /* --- ΝΕΟ: Εμφάνιση του Κοντινότερου Σημείου --- */
+  .ar-html-marker.closest-marker {
+    z-index: 100; /* Έρχεται μπροστά από όλα */
+    border-left: 4px solid #ff5722; 
+    transform: translate(-50%, -50%) scale(1.08); /* Γίνεται λίγο μεγαλύτερο */
+    box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 12px rgba(240, 194, 68, 0.3);
+  }
+  .closest-indicator {
+    display: none;
+    position: absolute;
+    top: -12px;
+    right: -8px;
+    background: #ff5722;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 6px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .ar-html-marker.closest-marker .closest-indicator {
+    display: block; /* Εμφανίζεται μόνο στο πιο κοντινό */
+  }
 
   /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
@@ -305,7 +330,7 @@
     <div class="btn-row">
       <!-- Το νέο κουμπί "Πίσω" -->
       <button class="btn-secondary" id="backToUploadBtn">Πίσω στα αρχεία</button>
-      <button class="btn-primary" id="closePreviewBtn">Αποστολή ιστορίας</button>
+      <button class="btn-primary" id="closePreviewBtn">Κλείσιμο Προβολής</button>
     </div>
   </div>
 </div>
@@ -415,6 +440,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       div.id = 'html-marker-' + s.id;
       div.style.display = 'none';
       div.innerHTML = `
+        <div class="closest-indicator">📍 ΚΟΝΤΙΝΟΤΕΡΟ</div>
         <span class="m-title">${s.title}</span>
         <span class="m-sub">${s.subtitle}</span>
         <span class="m-dist" id="dist-${s.id}">Υπολογισμός...</span>
@@ -443,12 +469,21 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     if (!cam) return;
 
     var calculatedItems = [];
+    var minDistance = Infinity;
+    var closestId = null;
 
     STORIES.forEach(s => {
       var markerEl = $('html-marker-' + s.id);
       if (!markerEl) return;
 
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
+      
+      // Βρίσκουμε ποιο είναι το πιο κοντινό
+      if (d < minDistance) {
+        minDistance = d;
+        closestId = s.id;
+      }
+
       var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
       $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
 
@@ -490,6 +525,17 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       item.el.style.left = targetX + 'px';
       item.el.style.top = targetY + 'px';
     }
+
+    // Εφαρμογή της κλάσης στο κοντινότερο marker
+    STORIES.forEach(s => {
+      var markerEl = $('html-marker-' + s.id);
+      if (!markerEl) return;
+      if (s.id === closestId) {
+        markerEl.classList.add('closest-marker');
+      } else {
+        markerEl.classList.remove('closest-marker');
+      }
+    });
   }
 
   function initMap() {
