@@ -313,13 +313,29 @@
   }, true);
 
   // 2. Για Android (Chrome 50+): Πρέπει να χρησιμοποιήσουμε το event 'deviceorientationabsolute'
-  window.addEventListener('deviceorientationabsolute', function(e) {
-    if (e.alpha !== null) {
-      // Στο Android, το alpha είναι 0 όταν κοιτάς τον Βορρά και αυξάνεται αριστερόστροφα.
-      // Το μετατρέπουμε στις κλασικές μοίρες πυξίδας (δεξιόστροφα).
-      window.hardwareHeading = (360 - e.alpha) % 360;
-    }
-  }, true);
+window.addEventListener('deviceorientationabsolute', function(e) {
+  if (e.alpha !== null) {
+    // Μετατροπή μοιρών σε ακτίνια (radians)
+    var alpha = e.alpha ? e.alpha * Math.PI / 180 : 0;
+    var beta = e.beta ? e.beta * Math.PI / 180 : 0;
+    var gamma = e.gamma ? e.gamma * Math.PI / 180 : 0;
+
+    var cA = Math.cos(alpha), sA = Math.sin(alpha);
+    var cB = Math.cos(beta), sB = Math.sin(beta);
+    var cG = Math.cos(gamma), sG = Math.sin(gamma);
+
+    // Διανύσματα για τον υπολογισμό της κατεύθυνσης ανεξαρτήτως κλίσης
+    var vX = -cA * sG - sA * sB * cG;
+    var vY = -sA * sG + cA * sB * cG;
+
+    var heading = Math.atan2(vX, vY) * 180 / Math.PI;
+    
+    // Μετατροπή σε θετικές μοίρες (0-360)
+    if (heading < 0) heading += 360;
+
+    window.hardwareHeading = heading;
+  }
+}, true);
 
   // ==========================================
   // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
@@ -353,32 +369,32 @@
   }
 
   AFRAME.registerComponent('hud-compass', {
-    tick: function () {
-      // Αν δεν έχουμε ακόμα δεδομένα από τον αισθητήρα, περιμένουμε
-      if (window.hardwareHeading === null) return;
+  tick: function () {
+    if (window.hardwareHeading === null) return;
+    var h = window.hardwareHeading;
+    window.currentHeading = h;
+    
+    if (this.displayHeading === undefined) this.displayHeading = h;
+    
+    // Υπολογισμός της διαφοράς
+    var diff = h - (this.displayHeading % 360);
+    if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
+    
+    // ΕΔΩ Η ΑΛΛΑΓΗ: Προσθήκη LERP (Linear Interpolation) 
+    // Το 0.1 σημαίνει ότι καλύπτει το 10% της απόστασης σε κάθε καρέ, "απορροφώντας" το τρέμουλο!
+    this.displayHeading += diff * 0.1; 
 
-      var h = window.hardwareHeading;
-
-      // Ενημερώνουμε την global μεταβλητή για τα markers
-      window.currentHeading = h;
-      
-      // Ομαλή περιστροφή για το UI
-      if (this.displayHeading === undefined) this.displayHeading = h;
-      var diff = h - (this.displayHeading % 360);
-      if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
-      this.displayHeading += diff;
-
-      var needle = document.querySelector('#compass .needle');
-      var degOut = document.querySelector('#compass .deg');
-      if (needle) {
-        needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
-        degOut.textContent = Math.round(h) + '°';
-      }
-      
-      applyHeadingToDot();
-      updateHTMLMarkersPosition();
+    var needle = document.querySelector('#compass .needle');
+    var degOut = document.querySelector('#compass .deg');
+    if (needle) {
+      needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
+      degOut.textContent = Math.round(this.displayHeading % 360) + '°'; // Δείξε την εξομαλυσμένη τιμή
     }
-  });
+    
+    applyHeadingToDot();
+    updateHTMLMarkersPosition();
+  }
+});
 
   function buildScene() {
     var container = $('ar-overlay-container');
