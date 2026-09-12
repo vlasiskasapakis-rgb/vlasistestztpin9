@@ -34,26 +34,26 @@
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
 
-  /* Σταθερά HTML AR Markers (Overlay) */
+  /* Σταθερά HTML AR Markers (Overlay) με ομαλή μετάβαση θέσης */
   #ar-overlay-container { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
   .ar-html-marker {
     position: absolute;
     transform: translate(-50%, -50%);
-    background: rgba(14, 42, 46, 0.92);
-    border-left: 6px solid var(--chalk);
+    background: rgba(14, 42, 46, 0.94);
+    border-left: 5px solid var(--chalk);
     color: var(--bone);
-    padding: 12px 18px;
+    padding: 10px 14px;
     border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
     pointer-events: auto;
     cursor: pointer;
-    min-width: 220px;
+    width: 240px;
     text-align: left;
-    transition: transform 0.1s ease-out;
+    transition: left 0.15s ease-out, top 0.15s ease-out;
   }
-  .ar-html-marker .m-title { display: block; font-size: 18px; font-weight: 700; color: var(--bone); }
-  .ar-html-marker .m-sub { display: block; font-size: 13px; color: var(--sea); margin-bottom: 4px; }
-  .ar-html-marker .m-dist { display: block; font-size: 15px; font-weight: 600; color: var(--chalk); }
+  .ar-html-marker .m-title { display: block; font-size: 16px; font-weight: 700; color: var(--bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ar-html-marker .m-sub { display: block; font-size: 12px; color: var(--sea); margin-bottom: 2px; }
+  .ar-html-marker .m-dist { display: block; font-size: 14px; font-weight: 600; color: var(--chalk); }
 
   /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
@@ -155,7 +155,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -351,7 +351,6 @@
     }
   });
 
-  // Δημιουργία HTML AR Markers στο DOM
   function buildScene() {
     var container = $('ar-overlay-container');
     container.innerHTML = '';
@@ -375,7 +374,6 @@
       container.appendChild(div);
     });
 
-    // Dummy A-Frame Camera για την κίνηση των αισθητήρων
     var parts = [`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`];
     var scene = document.createElement('a-scene');
     scene.setAttribute('hud-compass', ''); 
@@ -385,11 +383,13 @@
     document.body.appendChild(scene);
   }
 
-  // Υπολογισμός γωνίας και προβολή των markers με σταθερό μέγεθος στην οθόνη
+  // Υπολογισμός θέσης με αυτόματο Stacking για αποφυγή επικάλυψης
   function updateHTMLMarkersPosition() {
     if (!me || window.currentHeading === null) return;
     var cam = document.querySelector('#cam');
     if (!cam) return;
+
+    var calculatedItems = [];
 
     STORIES.forEach(s => {
       var markerEl = $('html-marker-' + s.id);
@@ -399,30 +399,46 @@
       var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
       $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
 
-      // Υπολογισμός γωνίας προς το Σημείο Ενδιαφέροντος (Bearing)
       var rad = function(d) { return d * Math.PI / 180; };
       var dLon = rad(s.lon - me.lon);
       var y = Math.sin(dLon) * Math.cos(rad(s.lat));
       var x = Math.cos(rad(me.lat)) * Math.sin(rad(s.lat)) - Math.sin(rad(me.lat)) * Math.cos(rad(s.lat)) * Math.cos(dLon);
       var bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 
-      // Σύγκριση γωνίας bearing με την κάμερα (heading)
       var angleDiff = bearing - window.currentHeading;
       while (angleDiff < -180) angleDiff += 360;
       while (angleDiff > 180) angleDiff -= 360;
 
-      // Εμφάνιση μόνο αν είναι εντός του οπτικού πεδίου (π.χ. +/- 70 μοίρες)
       if (Math.abs(angleDiff) < 70) {
-        markerEl.style.display = 'block';
-        // Μετατροπή μοιρών σε pixels οθόνης
         var screenX = window.innerWidth / 2 + (angleDiff / 70) * (window.innerWidth / 2);
-        var screenY = window.innerHeight / 2; // Σταθερά στο κέντρο καθέτως
-        markerEl.style.left = screenX + 'px';
-        markerEl.style.top = screenY + 'px';
+        calculatedItems.push({ el: markerEl, x: screenX, diff: angleDiff });
       } else {
         markerEl.style.display = 'none';
       }
     });
+
+    // Ταξινόμηση αριστερά προς δεξιά για αποφυγή επικαλύψεων (Collision avoidance / Stacking)
+    calculatedItems.sort((a, b) => a.x - b.x);
+
+    var basePosY = window.innerHeight / 2;
+    var minSpacing = 110; // Ελάχιστη απόσταση σε pixels ανάμεσα στα markers
+
+    for (var i = 0; i < calculatedItems.length; i++) {
+      var item = calculatedItems[i];
+      item.el.style.display = 'block';
+      
+      var targetX = item.x;
+      var targetY = basePosY;
+
+      // Αν πέφτει πάνω σε προηγούμενο στοιχείο, το μετατοπίζουμε καθέτως (πάνω/κάτω εναλλάξ)
+      if (i > 0 && Math.abs(calculatedItems[i].x - calculatedItems[i - 1].x) < minSpacing) {
+        var offset = (i % 2 === 0) ? -75 : 75;
+        targetY = basePosY + offset;
+      }
+
+      item.el.style.left = targetX + 'px';
+      item.el.style.top = targetY + 'px';
+    }
   }
 
   function initMap() {
