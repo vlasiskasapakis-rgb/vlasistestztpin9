@@ -302,15 +302,21 @@
   // Ανίχνευση iOS 
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  // Παγκόσμια μεταβλητή για τον πραγματικό Βορρά της συσκευής
+// Παγκόσμια μεταβλητή για τον πραγματικό Βορρά της συσκευής
   window.hardwareHeading = null;
+
+  // 1. Για iOS (Safari): Παίρνουμε τον Βορρά από το webkitCompassHeading
   window.addEventListener('deviceorientation', function(e) {
     if (e.webkitCompassHeading !== undefined) {
-      // iOS: Δίνει απευθείας τον πραγματικό Βορρά
       window.hardwareHeading = e.webkitCompassHeading;
-    } else if (e.absolute === true && e.alpha !== null) {
-      // Android: Το alpha είναι 0 στον Βορρά και αυξάνεται αριστερόστροφα
-      // Το μετατρέπουμε σε μοίρες πυξίδας (δεξιόστροφα)
+    }
+  }, true);
+
+  // 2. Για Android (Chrome 50+): Πρέπει να χρησιμοποιήσουμε το event 'deviceorientationabsolute'
+  window.addEventListener('deviceorientationabsolute', function(e) {
+    if (e.alpha !== null) {
+      // Στο Android, το alpha είναι 0 όταν κοιτάς τον Βορρά και αυξάνεται αριστερόστροφα.
+      // Το μετατρέπουμε στις κλασικές μοίρες πυξίδας (δεξιόστροφα).
       window.hardwareHeading = (360 - e.alpha) % 360;
     }
   }, true);
@@ -319,16 +325,13 @@
   // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
   // ==========================================
   var STORIES = [
-    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης με τον εντυπωσιακό τρούλο.' },
-    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης δίπλα στο λιμάνι.' },
-    { id: 'kastro', title: 'Κάστρο Μυτιλήνης', subtitle: 'Βόρειο Λιμάνι', lat: 39.111760, lon: 26.567080, radius: 50, text: 'Ένα από τα μεγαλύτερα κάστρα της Μεσογείου.' },
-    { id: 'ermou', title: 'Οδός Ερμού', subtitle: 'Εμπορικός Δρόμος', lat: 39.110420, lon: 26.557470, radius: 30, text: 'Ο ιστορικός εμπορικός δρόμος με τα παλιά μαγαζιά.' },
-    { id: 'athanasios', title: 'Άγιος Αθανάσιος', subtitle: 'Μητρόπολη', lat: 39.103850, lon: 26.553900, radius: 35, text: 'Ιστορικός ναός με εντυπωσιακό ξυλόγλυπτο τέμπλο.' },
-    { id: 'theatro', title: 'Αρχαίο Θέατρο', subtitle: 'Αρχαία Πόλη', lat: 39.101200, lon: 26.548900, radius: 45, text: 'Το αρχαίο θέατρο Μυτιλήνης με θέα προς τη θάλασσα.' },
-    { id: 'eleftheria', title: 'Άγαλμα Ελευθερίας', subtitle: 'Λιμάνι', lat: 39.108500, lon: 26.559200, radius: 35, text: 'Το εμβληματικό άγαλμα που δεσπόζει στην είσοδο του λιμανιού.' },
-    { id: 'marina', title: 'Μαρίνα Μυτιλήνης', subtitle: 'Νότια Πλευρά', lat: 39.098400, lon: 26.562100, radius: 40, text: 'Μοντέρνα μαρίνα για σκάφη αναψυχής.' },
-    { id: 'dimarcheio', title: 'Δημαρχείο Μυτιλήνης', subtitle: 'Κέντρο', lat: 39.107200, lon: 26.555800, radius: 30, text: 'Το νεοκλασικό κτίριο του Δημαρχείου.' },
-    { id: 'ermos_park', title: 'Πάρκο Χατζηγιάννη', subtitle: 'Κέντρο Πόλης', lat: 39.104500, lon: 26.551200, radius: 30, text: 'Καταπράσινο σημείο αναψυχής στο κέντρο.' }
+    { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Κέντρο', lat: 39.106668, lon: 26.557367, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης δίπλα στο λιμάνι.' },
+    { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105126, lon: 26.554749, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης με τον εντυπωσιακό τρούλο.' },
+    { id: 'mikrasiatisa', title: 'Μικρασιάτισσα Μάνα', subtitle: 'Επάνω Σκάλα', lat: 39.112350, lon: 26.557179, radius: 35, text: 'Το μνημείο που είναι αφιερωμένο στη Μικρασιάτισσα Μάνα.' },
+    { id: 'geni_tzami', title: 'Γενί Τζαμί', subtitle: 'Επάνω Σκάλα', lat: 39.110375, lon: 26.557753, radius: 35, text: 'Το ιστορικό οθωμανικό τέμενος της Μυτιλήνης.' },
+    { id: 'agios_eudokimos', title: 'Άγιος Ευδόκιμος', subtitle: 'Ιστορικό Κέντρο', lat: 39.109996, lon: 26.556444, radius: 35, text: 'Ιστορικός ναός της πόλης.' },
+    { id: 'agalma', title: 'Άγαλμα Ελευθερίας', subtitle: 'Λιμάνι', lat: 39.105871, lon: 26.563128, radius: 40, text: 'Το εμβληματικό άγαλμα που δεσπόζει στην είσοδο του λιμανιού.' },
+    { id: 'kastro', title: 'Κάστρο Μυτιλήνης', subtitle: 'Βόρεια Πλευρά', lat: 39.111665, lon: 26.562324, radius: 50, text: 'Ένα από τα μεγαλύτερα κάστρα της Μεσογείου.' }
   ];
 
   var MIN_DIST = 2;
