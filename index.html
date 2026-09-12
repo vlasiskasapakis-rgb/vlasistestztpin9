@@ -315,9 +315,9 @@
       var o = this.el.object3D;
       o.lookAt(_camPos.x, o.position.y, o.position.z);
       
-      // Διόρθωση φοράς entities στο iOS (αν κοιτάζουν από την ανάποδη)
+      // Διατηρούμε τη σωστή φορά των markers για το iOS
       if (isIOS && !this.iosFlipped) {
-        o.rotateY(Math.PI); // 180 μοίρες στροφή για να έρθουν μπροστά
+        o.rotateY(Math.PI);
         this.iosFlipped = true;
       }
     }
@@ -332,11 +332,10 @@
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
 
-      if (isIOS) {
-        h = (h + 180) % 360;
-      }
-
+      // Εδώ ΔΕΝ προσθέτουμε 180° στο h για να μην χαλάσουμε τα markers, 
+      // αλλά θα το χειριστούμε παρακάτω στη βελόνα της πυξίδας του χάρτη/HUD.
       window.currentHeading = h;
+
       if (this.displayHeading === undefined) this.displayHeading = h;
       var diff = h - (this.displayHeading % 360);
       if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
@@ -345,8 +344,10 @@
       var needle = document.querySelector('#compass .needle');
       var degOut = document.querySelector('#compass .deg');
       if (needle) {
-        needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
-        degOut.textContent = Math.round(h) + '°';
+        // Αν είναι iOS, προσθέτουμε 180 μοίρες αποκλειστικά στη βελόνα της πυξίδας
+        var compassHeading = isIOS ? (this.displayHeading + 180) : this.displayHeading;
+        needle.style.transform = 'rotate(' + (-compassHeading) + 'deg)';
+        degOut.textContent = Math.round(isIOS ? ((h + 180) % 360) : h) + '°';
       }
       applyHeadingToDot();
     }
@@ -471,7 +472,10 @@
     if(!cachedRot) { var elm = meMarker.getElement(); if(elm) cachedRot = elm.querySelector('.me-rot'); }
     if(!cachedRot) return;
     cachedRot.classList.remove('unknown');
-    var diff = window.currentHeading - (displayMapHeading % 360);
+    
+    // Εφαρμογή offset 180° στον χάρτη μόνο αν είναι iOS
+    var targetHeading = isIOS ? (window.currentHeading + 180) : window.currentHeading;
+    var diff = targetHeading - (displayMapHeading % 360);
     if(diff > 180) diff -= 360; else if(diff < -180) diff += 360;
     displayMapHeading += diff;
     cachedRot.style.transform = `rotate(${displayMapHeading}deg)`;
@@ -486,7 +490,8 @@
   function onPosition(pos) {
     me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
     updateARLabels(); updateMap();
-    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(window.currentHeading)}°`);
+    var displayH = window.currentHeading === null ? '' : `Πυξίδα ${Math.round(isIOS ? ((window.currentHeading + 180) % 360) : window.currentHeading)}°`;
+    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + displayH;
 
     $('addBtn').classList.add('on');
     $('locDisplay').textContent = `${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}`;
