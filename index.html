@@ -135,7 +135,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -276,7 +276,7 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
-  // Ανίχνευση iOS για τη διόρθωση της πυξίδας κατά 180°
+  // Ανίχνευση iOS
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // ==========================================
@@ -314,6 +314,12 @@
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
       o.lookAt(_camPos.x, o.position.y, o.position.z);
+      
+      // Διόρθωση φοράς entities στο iOS (αν κοιτάζουν από την ανάποδη)
+      if (isIOS && !this.iosFlipped) {
+        o.rotateY(Math.PI); // 180 μοίρες στροφή για να έρθουν μπροστά
+        this.iosFlipped = true;
+      }
     }
   });
 
@@ -326,7 +332,6 @@
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
 
-      // Αν είναι iOS, διορθώνουμε την απόκλιση 180 μοιρών της κάμερας
       if (isIOS) {
         h = (h + 180) % 360;
       }
