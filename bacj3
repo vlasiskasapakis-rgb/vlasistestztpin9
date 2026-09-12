@@ -40,7 +40,7 @@
     position: absolute;
     transform: translate(-50%, -50%);
     background: rgba(14, 42, 46, 0.94);
-    border-left: 4px solid var(--chalk);
+    border-left: 4px solid var(--sea); /* Βασικό χρώμα ρίγας για τα μακρινά */
     color: var(--bone);
     padding: 8px 12px;
     border-radius: 6px;
@@ -49,8 +49,36 @@
     cursor: pointer;
     width: 180px;
     text-align: left;
-    transition: left 0.15s ease-out, top 0.15s ease-out;
+    z-index: 1; /* Χαμηλό z-index για τα απλά */
+    transition: left 0.15s ease-out, top 0.15s ease-out, transform 0.2s ease-out, box-shadow 0.2s ease-out;
   }
+  
+  /* Σήμανση Κοντινότερου Marker */
+  .ar-html-marker.closest {
+    z-index: 100; /* Μπαίνει μπροστά από όλα */
+    border-left: 4px solid var(--chalk); /* Κίτρινη ρίγα */
+    transform: translate(-50%, -50%) scale(1.06); /* Μεγαλώνει λίγο */
+    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+  }
+  
+  .closest-badge {
+    position: absolute;
+    top: -12px;
+    right: -10px;
+    background: var(--chalk);
+    color: var(--ink);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    display: none;
+    pointer-events: none;
+  }
+  .ar-html-marker.closest .closest-badge {
+    display: block; /* Εμφανίζεται μόνο στο κοντινότερο */
+  }
+
   .ar-html-marker .m-title { display: block; font-size: 14px; font-weight: 700; color: var(--bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ar-html-marker .m-sub { display: block; font-size: 11px; color: var(--sea); margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ar-html-marker .m-dist { display: block; font-size: 12px; font-weight: 600; color: var(--chalk); }
@@ -152,7 +180,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>12Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -303,9 +331,8 @@
     <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
 
     <div class="btn-row">
-      <!-- Το νέο κουμπί "Πίσω" -->
       <button class="btn-secondary" id="backToUploadBtn">Πίσω στα αρχεία</button>
-      <button class="btn-primary" id="closePreviewBtn">Αποστολή ιστορίας</button>
+      <button class="btn-primary" id="closePreviewBtn">Κλείσιμο Προβολής</button>
     </div>
   </div>
 </div>
@@ -415,6 +442,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       div.id = 'html-marker-' + s.id;
       div.style.display = 'none';
       div.innerHTML = `
+        <div class="closest-badge">📍 Πιο κοντά</div>
         <span class="m-title">${s.title}</span>
         <span class="m-sub">${s.subtitle}</span>
         <span class="m-dist" id="dist-${s.id}">Υπολογισμός...</span>
@@ -443,6 +471,14 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     if (!cam) return;
 
     var calculatedItems = [];
+    var minDist = Infinity;
+    var closestId = null;
+
+    // Πρώτο πέρασμα: Βρίσκουμε ποιο marker είναι το απολύτως πιο κοντινό
+    STORIES.forEach(s => {
+      var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
+      if (d < minDist) { minDist = d; closestId = s.id; }
+    });
 
     STORIES.forEach(s => {
       var markerEl = $('html-marker-' + s.id);
@@ -451,6 +487,10 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
       var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
       $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
+
+      // Εφαρμογή / Αφαίρεση της κλάσης "closest"
+      if (s.id === closestId) markerEl.classList.add('closest');
+      else markerEl.classList.remove('closest');
 
       var rad = function(d) { return d * Math.PI / 180; };
       var dLon = rad(s.lon - me.lon);
@@ -1267,7 +1307,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     }, { once: true });
   }
 
-  // --- ΝΕΟ: Επιστροφή από το τελικό preview στη λίστα upload ---
   $('backToUploadBtn').onclick = function() {
     var container = $('localPreviewContainer');
     container.querySelectorAll('video, audio').forEach(media => {
@@ -1279,7 +1318,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     previewURLs.forEach(function(u){ URL.revokeObjectURL(u); });
     previewURLs = [];
     
-    // Αλλάζουμε απλά το ποιο μενού φαίνεται, χωρίς να χάσουμε τα αρχεία
     $('previewSheet').classList.remove('on');
     $('uploadSheet').classList.add('on');
   };
