@@ -302,15 +302,21 @@
   // Ανίχνευση iOS 
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  // Παγκόσμια μεταβλητή για τον πραγματικό Βορρά της συσκευής
+// Παγκόσμια μεταβλητή για τον πραγματικό Βορρά της συσκευής
   window.hardwareHeading = null;
+
+  // 1. Για iOS (Safari): Παίρνουμε τον Βορρά από το webkitCompassHeading
   window.addEventListener('deviceorientation', function(e) {
     if (e.webkitCompassHeading !== undefined) {
-      // iOS: Δίνει απευθείας τον πραγματικό Βορρά
       window.hardwareHeading = e.webkitCompassHeading;
-    } else if (e.absolute === true && e.alpha !== null) {
-      // Android: Το alpha είναι 0 στον Βορρά και αυξάνεται αριστερόστροφα
-      // Το μετατρέπουμε σε μοίρες πυξίδας (δεξιόστροφα)
+    }
+  }, true);
+
+  // 2. Για Android (Chrome 50+): Πρέπει να χρησιμοποιήσουμε το event 'deviceorientationabsolute'
+  window.addEventListener('deviceorientationabsolute', function(e) {
+    if (e.alpha !== null) {
+      // Στο Android, το alpha είναι 0 όταν κοιτάς τον Βορρά και αυξάνεται αριστερόστροφα.
+      // Το μετατρέπουμε στις κλασικές μοίρες πυξίδας (δεξιόστροφα).
       window.hardwareHeading = (360 - e.alpha) % 360;
     }
   }, true);
