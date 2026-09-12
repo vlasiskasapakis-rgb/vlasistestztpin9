@@ -294,15 +294,19 @@
   <p style="font-size:12px; opacity:.7; margin-top:14px;">Εφαρμογή ρυθμίσεων. Μην κλειδώσεις την οθόνη.</p>
 </div>
 
-<!-- 3. Μενού Τοπικής Προβολής Αρχείων -->
+<!-- 3. Μενού Τοπικής Προβολής Αρχείων (Τελικό Preview) -->
 <div id="previewSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Τα Αρχεία σου (Τοπική Προβολή)</h2>
-    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου πριν πατήσεις Ολοκλήρωση.</p>
+    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου.</p>
 
     <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
 
-    <button class="btn-primary" id="closePreviewBtn" style="width:100%;">Κλείσιμο Προβολής</button>
+    <div class="btn-row">
+      <!-- Το νέο κουμπί "Πίσω" -->
+      <button class="btn-secondary" id="backToUploadBtn">Πίσω στα αρχεία</button>
+      <button class="btn-primary" id="closePreviewBtn">Κλείσιμο Προβολής</button>
+    </div>
   </div>
 </div>
 
@@ -1154,7 +1158,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
         });
       }
 
-      // 1. Δημιουργία Όμορφου Ονόματος
       var typeGr = baseType === 'image' ? 'Εικόνα' : (baseType === 'video' ? 'Βίντεο' : 'Ήχος');
       var count = processedFiles.filter(function(x){ return x.type.startsWith(baseType); }).length + 1;
       var generatedDisplayName = typeGr + ' ' + count;
@@ -1187,12 +1190,11 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     updateMediaListUI();
   };
 
-  // 2. Νέα λειτουργία: Επεξεργασία από την αρχική λίστα!
   window.editFromUploadList = function(index) {
     var f = processedFiles[index];
     if (!f) return;
     processedFiles.splice(index, 1);
-    updateMediaListUI(); // Αφαίρεση από τη λίστα UI
+    updateMediaListUI(); 
     var fileObj = new File([f.blob], f.name, { type: f.type });
     loadFileIntoEditor(fileObj, f.meta);
   };
@@ -1219,21 +1221,10 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     list.innerHTML = html;
   }
 
-  // Αυτή η μέθοδος αφορά το τελικό preview (αφού πατήσεις "Ολοκλήρωση Ιστορίας")
-  window.editSavedMedia = function(index) {
-    var f = processedFiles[index];
-    if (!f) return;
-    $('previewSheet').classList.remove('on');
-    var fileObj = new File([f.blob], f.name, { type: f.type });
-    loadFileIntoEditor(fileObj, f.meta);
-    processedFiles.splice(index, 1);
-    updateMediaListUI(); // Σε περίπτωση που ο χρήστης ακυρώσει, θα επιστρέψει στο κεντρικό upload sheet
-  };
-
   $('finishStoryBtn').onclick = function() {
     var title = $('storyTitle').value;
     if (!title) return alert("Βάλε έναν τίτλο για την ιστορία σου.");
-    if (processedFiles.length === 0) return alert("Πρόσθε τουλάχιστον ένα αρχείο.");
+    if (processedFiles.length === 0) return alert("Πρόσθεσε τουλάχιστον ένα αρχείο.");
 
     $('uploadSheet').classList.remove('on');
     var container = $('localPreviewContainer');
@@ -1249,14 +1240,12 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       previewURLs.push(blobUrl);
 
       if (f.type.startsWith('image/')) {
-        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">`;
+        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px;">`;
       } else if (f.type.startsWith('video/')) {
-        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>`;
+        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px;"></video>`;
       } else {
-        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
+        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%;"></audio>`;
       }
-      
-      itemBox.innerHTML += `<button class="edit-media-btn" style="width:100%; padding:10px; margin-top:5px; margin-right:0; border-radius:4px; font-weight:bold; font-size:15px;" onclick="editSavedMedia(${i})">✏️ Ξανά-επεξεργασία</button>`;
       
       container.appendChild(itemBox);
     });
@@ -1277,6 +1266,23 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       });
     }, { once: true });
   }
+
+  // --- ΝΕΟ: Επιστροφή από το τελικό preview στη λίστα upload ---
+  $('backToUploadBtn').onclick = function() {
+    var container = $('localPreviewContainer');
+    container.querySelectorAll('video, audio').forEach(media => {
+      media.pause();
+      media.removeAttribute('src');
+      media.load();
+    });
+    container.innerHTML = '';
+    previewURLs.forEach(function(u){ URL.revokeObjectURL(u); });
+    previewURLs = [];
+    
+    // Αλλάζουμε απλά το ποιο μενού φαίνεται, χωρίς να χάσουμε τα αρχεία
+    $('previewSheet').classList.remove('on');
+    $('uploadSheet').classList.add('on');
+  };
 
   $('closePreviewBtn').onclick = function() {
     var container = $('localPreviewContainer');
