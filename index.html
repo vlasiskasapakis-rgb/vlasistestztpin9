@@ -11,9 +11,12 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
-<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+
+<!-- ΔΙΟΡΘΩΣΗ 1: A-Frame 1.3.0 (δοκιμασμένο με AR.js 3.4.7) + ΜΟΝΟ το location-only build.
+     Το παλιό setup φόρτωνε ταυτόχρονα ar-threex-location-only.js ΚΑΙ aframe-ar.js,
+     που δημιουργούσε δύο ανταγωνιστικά DeviceOrientationControls -> κολλημένα markers στο iOS. -->
+<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.7/aframe/build/aframe-ar-location-only.js"></script>
 
 <style>
   :root {
@@ -34,6 +37,7 @@
   /* AR Scene - Πίσω από όλα */
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
+  body.editing #arjs-video { visibility: hidden !important; }
 
   /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
@@ -106,9 +110,9 @@
   #imageCanvas { width: 100%; display: block; touch-action: none; }
   #videoContainer { position: relative; width: 100%; }
   #videoPreview { width: 100%; display: block; }
-  
+
   /* Timeline Σχεδίαση */
-  #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
+  #videoTimeline, #audioTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
   .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
   .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
   .timeline-block.mute { background: rgba(217, 83, 79, 0.85); }
@@ -135,7 +139,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -190,7 +194,7 @@
     </div>
 
     <div class="btn-row">
-      <button class="btn-secondary" onclick="cancelStory()">Ακύρωση</button>
+      <button class="btn-secondary" id="cancelStoryBtn">Ακύρωση</button>
       <button class="btn-primary" id="finishStoryBtn">Ολοκλήρωση Ιστορίας</button>
     </div>
   </div>
@@ -226,7 +230,7 @@
       <div id="videoContainer">
         <video id="videoPreview" controls playsinline preload="metadata"></video>
       </div>
-      <div id="videoTimeline" class="media-timeline" title="Timeline βίντεο"></div>
+      <div id="videoTimeline" title="Timeline βίντεο"></div>
       <div id="vTimeNow">Τρέχον σημείο: 0.0s</div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea); display:block;">Διαστήματα επεξεργασίας (Stamps)</label>
@@ -236,8 +240,8 @@
 
     <!-- Editor Ήχου -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
-      <audio id="audioPreview" controls style="width:100%; margin-bottom:6px;"></audio>
-      <div id="audioTimeline" class="media-timeline" title="Timeline ήχου"></div>
+      <audio id="audioPreview" controls playsinline style="width:100%; margin-bottom:6px;"></audio>
+      <div id="audioTimeline" title="Timeline ήχου"></div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
       <div id="audioMuteList"></div>
@@ -275,9 +279,11 @@
 (function () {
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
+  var IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // ==========================================
-  // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
+  // 1. AR & ΧΑΡΤΗΣ
   // ==========================================
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης.' },
@@ -293,13 +299,49 @@
   function setAR(active) {
     var sc = document.querySelector('a-scene');
     if (!sc) return;
-    if (!active && !arPaused) { try { sc.pause(); } catch(e){} arPaused = true; document.body.classList.add('editing'); }
-    else if (active && arPaused) { try { sc.play(); } catch(e){} arPaused = false; document.body.classList.remove('editing'); }
+    if (!active && !arPaused) {
+      try { sc.pause(); } catch(e){}
+      arPaused = true;
+      document.body.classList.add('editing');
+    } else if (active && arPaused) {
+      try { sc.play(); } catch(e){}
+      arPaused = false;
+      document.body.classList.remove('editing');
+    }
+  }
+
+  // --- ΔΙΟΡΘΩΣΗ 3α: το iOS επιτρέπει ΜΙΑ ενεργή capture session.
+  // Πριν ανοίξουμε μικρόφωνο πρέπει να αφήσουμε ρητά την κάμερα του AR.js.
+  var arCameraStopped = false;
+  function getARVideoEl() {
+    return document.querySelector('#arjs-video') || document.querySelector('a-scene video');
+  }
+  function stopARCamera() {
+    var v = getARVideoEl();
+    if (v && v.srcObject) {
+      try { v.srcObject.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+      v.srcObject = null;
+      arCameraStopped = true;
+    }
+  }
+  function resumeARCamera() {
+    if (!arCameraStopped) return Promise.resolve();
+    var v = getARVideoEl();
+    if (!v) { arCameraStopped = false; return Promise.resolve(); }
+    return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(function(s) {
+        v.srcObject = s;
+        arCameraStopped = false;
+        return v.play().catch(function(){});
+      })
+      .catch(function(){ arCameraStopped = false; });
   }
 
   function distanceMetres(lat1, lon1, lat2, lon2) {
     var R = 6371000, rad = function(d) { return d * Math.PI / 180; };
-    var a = Math.sin(rad(lat2 - lat1)/2) * Math.sin(rad(lat2 - lat1)/2) + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1)/2) * Math.sin(rad(lon2 - lon1)/2);
+    var a = Math.sin(rad(lat2 - lat1)/2) * Math.sin(rad(lat2 - lat1)/2) +
+            Math.cos(rad(lat1)) * Math.cos(rad(lat2)) *
+            Math.sin(rad(lon2 - lon1)/2) * Math.sin(rad(lon2 - lon1)/2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
 
@@ -339,20 +381,13 @@
     }
   });
 
-  // Ειδικό component για να διορθώσουμε τη φορά των 3D entities στο iOS
-  AFRAME.registerComponent('ios-ar-fix', {
-    tick: function() {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) {
-        this.el.object3D.rotation.y = THREE.MathUtils.degToRad(180);
-      }
-    }
-  });
+  // ΔΙΟΡΘΩΣΗ 1β: το component 'ios-ar-fix' αφαιρέθηκε εντελώς.
+  // Έγραφε rotation.y = 180° στην κάμερα σε κάθε tick και ακύρωνε
+  // τα device-orientation controls -> markers κολλημένοι στο iOS.
 
   function makeLabelImage(title, subtitle, isCluster) {
-    var c = document.createElement('canvas'); c.width = 1800; c.height = 600; var g = c.getContext('2d'); g.scale(2,2);
+    var c = document.createElement('canvas'); c.width = 1800; c.height = 600;
+    var g = c.getContext('2d'); g.scale(2,2);
     g.fillStyle = isCluster ? 'rgba(14,42,46,0.95)' : 'rgba(14,42,46,0.90)'; g.fillRect(0,0,900,300);
     g.fillStyle = isCluster ? '#4E8C93' : '#F0C244'; g.fillRect(0,0,16,300);
     g.fillStyle = '#F2EDE4'; g.font = '600 82px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 120);
@@ -364,17 +399,18 @@
 
   function prepareARClusters() {
     var assigned = {};
-    STORIES.forEach((s, i) => {
-      if(assigned[i]) return;
-      var c = { id: 'c-'+i, stories: [s], lat: s.lat, lon: s.lon }; assigned[i] = true;
-      STORIES.forEach((s2, j) => {
-        if(i!==j && !assigned[j] && distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
+    STORIES.forEach(function(s, i) {
+      if (assigned[i]) return;
+      var c = { id: 'c-'+i, stories: [s], lat: s.lat, lon: s.lon };
+      assigned[i] = true;
+      STORIES.forEach(function(s2, j) {
+        if (i !== j && !assigned[j] && distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
           c.stories.push(s2); assigned[j] = true;
         }
       });
-      if(c.stories.length > 1) {
-        c.lat = c.stories.reduce((sum,st)=>sum+st.lat,0)/c.stories.length;
-        c.lon = c.stories.reduce((sum,st)=>sum+st.lon,0)/c.stories.length;
+      if (c.stories.length > 1) {
+        c.lat = c.stories.reduce(function(sum,st){ return sum+st.lat; },0)/c.stories.length;
+        c.lon = c.stories.reduce(function(sum,st){ return sum+st.lon; },0)/c.stories.length;
         AR_CLUSTERS.push(c);
       }
     });
@@ -384,101 +420,118 @@
     prepareARClusters();
     var parts = [];
 
-    AR_CLUSTERS.forEach(c => {
+    AR_CLUSTERS.forEach(function(c) {
       var imgId = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', true);
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push('<a-entity id="' + c.id + '" class="ar-cluster" gps-new-entity-place="latitude: ' + c.lat + '; longitude: ' + c.lon + '" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" material="src: #' + imgId + '; transparent: true; shader: flat; side: double"></a-plane></a-entity>');
     });
 
-    STORIES.forEach(s => {
+    STORIES.forEach(function(s) {
       var imgId = makeLabelImage(s.title, s.subtitle, false);
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push('<a-entity class="poi" data-id="' + s.id + '" gps-new-entity-place="latitude: ' + s.lat + '; longitude: ' + s.lon + '" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ' + Y_OFF + ' 0" material="src: #' + imgId + '; transparent: true; shader: flat; side: double"></a-plane></a-entity>');
     });
 
-    parts.push(`<a-camera id="cam" ios-ar-fix gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
+    // ΔΙΟΡΘΩΣΗ 1γ: arjs-look-controls με smoothing — ο τεκμηριωμένος τρόπος
+    // για location-based AR. Χωρίς χειροκίνητο rotation override.
+    parts.push('<a-camera id="cam" gps-new-camera="gpsMinDistance: ' + MIN_DIST + '" arjs-look-controls="smoothingFactor: 0.1" rotation-reader></a-camera>');
 
     var scene = document.createElement('a-scene');
-    scene.setAttribute('hud-compass', ''); 
+    scene.setAttribute('hud-compass', '');
     scene.setAttribute('vr-mode-ui', 'enabled: false');
+    scene.setAttribute('renderer', 'antialias: true; logarithmicDepthBuffer: true');
     scene.setAttribute('arjs', 'sourceType: webcam; videoTexture: true; debugUIEnabled: false');
-    scene.innerHTML = parts.join(''); 
+    scene.innerHTML = parts.join('');
     document.body.appendChild(scene);
   }
 
   function updateARLabels() {
-    if(!me) return;
-    AR_CLUSTERS.forEach(c => {
-      var el = document.getElementById(c.id); if(!el) return;
+    if (!me) return;
+    AR_CLUSTERS.forEach(function(c) {
+      var el = document.getElementById(c.id); if (!el) return;
       var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
-      if(d < CLUSTER_REVEAL_M) el.setAttribute('visible', 'false');
+      if (d < CLUSTER_REVEAL_M) el.setAttribute('visible', 'false');
       else { el.setAttribute('visible', 'true'); var k = Math.max(d, 25)*0.09; el.setAttribute('scale', k+' '+k+' 1'); }
     });
-    STORIES.forEach(s => {
-      var el = document.querySelector(`.poi[data-id="${s.id}"]`); if(!el) return;
-      var parent = AR_CLUSTERS.find(c => c.stories.includes(s));
-      if(parent && distanceMetres(me.lat, me.lon, parent.lat, parent.lon) >= CLUSTER_REVEAL_M) { el.setAttribute('visible', 'false'); return; }
+    STORIES.forEach(function(s) {
+      var el = document.querySelector('.poi[data-id="' + s.id + '"]'); if (!el) return;
+      var parent = AR_CLUSTERS.find(function(c){ return c.stories.indexOf(s) > -1; });
+      if (parent && distanceMetres(me.lat, me.lon, parent.lat, parent.lon) >= CLUSTER_REVEAL_M) {
+        el.setAttribute('visible', 'false'); return;
+      }
       el.setAttribute('visible', 'true');
-      var k = Math.max(distanceMetres(me.lat, me.lon, s.lat, s.lon), 25)*0.09; el.setAttribute('scale', k+' '+k+' 1');
+      var k = Math.max(distanceMetres(me.lat, me.lon, s.lat, s.lon), 25)*0.09;
+      el.setAttribute('scale', k+' '+k+' 1');
     });
   }
 
   function initMap() {
     map = L.map('map', {zoomControl: true, attributionControl: false}).setView([STORIES[0].lat, STORIES[0].lon], 16);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
-    var markers = L.markerClusterGroup({ maxClusterRadius: 40, iconCreateFunction: c => L.divIcon({html: c.getChildCount(), className: 'map-cluster-dot', iconSize: [32, 32]}) });
-    STORIES.forEach(s => {
-      var m = L.marker([s.lat, s.lon], { icon: L.divIcon({html: '<div class="poi-dot"></div>', iconSize: [13, 13]}) }).on('click', () => {
-        $('sheetTitle').textContent = s.title; $('sheetSub').textContent = s.subtitle; $('sheetBody').textContent = s.text;
-        $('infoSheet').classList.add('on');
-      });
+    var markers = L.markerClusterGroup({
+      maxClusterRadius: 40,
+      iconCreateFunction: function(c){ return L.divIcon({html: c.getChildCount(), className: 'map-cluster-dot', iconSize: [32, 32]}); }
+    });
+    STORIES.forEach(function(s) {
+      var m = L.marker([s.lat, s.lon], { icon: L.divIcon({html: '<div class="poi-dot"></div>', iconSize: [13, 13]}) })
+        .on('click', function() {
+          $('sheetTitle').textContent = s.title; $('sheetSub').textContent = s.subtitle; $('sheetBody').textContent = s.text;
+          $('infoSheet').classList.add('on');
+        });
       markers.addLayer(m);
     });
     map.addLayer(markers);
-    map.on('dragstart', () => followMe = false);
+    map.on('dragstart', function(){ followMe = false; });
   }
 
   function updateMap() {
-    if(!map || !me) return;
+    if (!map || !me) return;
     var ll = [me.lat, me.lon];
-    if(!meMarker) {
-      meMarker = L.marker(ll, { icon: L.divIcon({className: '', html: '<div class="me-wrap"><div class="me-rot unknown"><div class="me-cone"></div><div class="me-dot"></div></div></div>', iconSize: [56, 56], iconAnchor: [28, 28]}), zIndexOffset: 1000 }).addTo(map);
+    if (!meMarker) {
+      meMarker = L.marker(ll, {
+        icon: L.divIcon({className: '', html: '<div class="me-wrap"><div class="me-rot unknown"><div class="me-cone"></div><div class="me-dot"></div></div></div>', iconSize: [56, 56], iconAnchor: [28, 28]}),
+        zIndexOffset: 1000
+      }).addTo(map);
       accCircle = L.circle(ll, {radius: me.accuracy||0, color: '#F0C244'}).addTo(map);
     } else {
       meMarker.setLatLng(ll); accCircle.setLatLng(ll).setRadius(me.accuracy||0);
     }
-    if(followMe) map.setView(ll, map.getZoom(), {animate: false});
+    if (followMe) map.setView(ll, map.getZoom(), {animate: false});
   }
 
   var cachedRot = null, displayMapHeading = 0;
   function applyHeadingToDot() {
-    if(!meMarker || window.currentHeading === null) return;
-    if(!cachedRot) { var elm = meMarker.getElement(); if(elm) cachedRot = elm.querySelector('.me-rot'); }
-    if(!cachedRot) return;
+    if (!meMarker || window.currentHeading === null) return;
+    if (!cachedRot) { var elm = meMarker.getElement(); if (elm) cachedRot = elm.querySelector('.me-rot'); }
+    if (!cachedRot) return;
     cachedRot.classList.remove('unknown');
     var diff = window.currentHeading - (displayMapHeading % 360);
-    if(diff > 180) diff -= 360; else if(diff < -180) diff += 360;
+    if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
     displayMapHeading += diff;
-    cachedRot.style.transform = `rotate(${displayMapHeading}deg)`;
+    cachedRot.style.transform = 'rotate(' + displayMapHeading + 'deg)';
   }
 
-  $('handle').addEventListener('click', () => {
+  $('handle').addEventListener('click', function() {
     $('drawer').classList.toggle('open'); document.body.classList.toggle('drawer-open');
-    if(map) setTimeout(() => { map.invalidateSize(); updateMap(); }, 300);
+    if (map) setTimeout(function(){ map.invalidateSize(); updateMap(); }, 300);
   });
-  $('closeInfoBtn').addEventListener('click', () => $('infoSheet').classList.remove('on'));
+  $('closeInfoBtn').addEventListener('click', function(){ $('infoSheet').classList.remove('on'); });
 
   function onPosition(pos) {
     me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
     updateARLabels(); updateMap();
-    $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(window.currentHeading)}°`);
+    $('status').textContent = 'Ακρίβεια ' + Math.round(me.accuracy) + 'm. ' +
+      (window.currentHeading === null ? '' : 'Πυξίδα ' + Math.round(window.currentHeading) + '°');
 
     $('addBtn').classList.add('on');
-    $('locDisplay').textContent = `${me.lat.toFixed(5)}, ${me.lon.toFixed(5)}`;
+    $('locDisplay').textContent = me.lat.toFixed(5) + ', ' + me.lon.toFixed(5);
 
-    var ranked = STORIES.map(s => ({s:s, d:distanceMetres(me.lat, me.lon, s.lat, s.lon)})).sort((a,b)=>a.d-b.d)[0];
-    if(ranked) {
-      var btn = $('nearest'); btn.querySelector('.dist').textContent = (ranked.d <= ranked.s.radius) ? 'Είσαι εδώ' : `${Math.round(ranked.d)}m μακριά`;
+    var ranked = STORIES.map(function(s){ return {s:s, d:distanceMetres(me.lat, me.lon, s.lat, s.lon)}; })
+                        .sort(function(a,b){ return a.d-b.d; })[0];
+    if (ranked) {
+      var btn = $('nearest');
+      btn.querySelector('.dist').textContent = (ranked.d <= ranked.s.radius) ? 'Είσαι εδώ' : Math.round(ranked.d) + 'm μακριά';
       btn.querySelector('.name').textContent = ranked.s.title;
-      btn.classList.add('on'); btn.onclick = () => {
+      btn.classList.add('on');
+      btn.onclick = function() {
         $('sheetTitle').textContent = ranked.s.title; $('sheetSub').textContent = ranked.s.subtitle; $('sheetBody').textContent = ranked.s.text;
         $('infoSheet').classList.add('on');
       };
@@ -486,30 +539,76 @@
   }
 
   $('startBtn').addEventListener('click', function() {
-    this.disabled = true; this.textContent = 'Άνοιγμα κάμερας…';
-    (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function' ? DeviceOrientationEvent.requestPermission() : Promise.resolve('granted'))
-    .then(state => {
-      if(state !== 'granted') throw new Error('Δεν δόθηκε άδεια.');
-      buildScene(); $('gate').style.display = 'none'; $('hud').classList.add('on'); initMap();
-      navigator.geolocation.watchPosition(onPosition, err => $('status').textContent = 'Σφάλμα GPS', {enableHighAccuracy: true, timeout: 10000});
-    }).catch(e => { this.disabled = false; this.textContent = 'Δοκίμασε ξανά'; alert(e); });
+    var self = this;
+    self.disabled = true; self.textContent = 'Άνοιγμα κάμερας…';
+
+    // ΔΙΟΡΘΩΣΗ 3β: ξεκλειδώνουμε το AudioContext μέσα στο ίδιο user gesture.
+    ensureAudioCtx();
+
+    (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function'
+      ? DeviceOrientationEvent.requestPermission()
+      : Promise.resolve('granted'))
+    .then(function(state) {
+      if (state !== 'granted') throw new Error('Δεν δόθηκε άδεια για τους αισθητήρες κίνησης.');
+      buildScene();
+      $('gate').style.display = 'none';
+      $('hud').classList.add('on');
+      initMap();
+      navigator.geolocation.watchPosition(onPosition, function(){
+        $('status').textContent = 'Σφάλμα GPS';
+      }, {enableHighAccuracy: true, timeout: 10000});
+    }).catch(function(e) {
+      self.disabled = false; self.textContent = 'Δοκίμασε ξανά';
+      alert(e && e.message ? e.message : e);
+    });
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με iOS-safe Blur)
+  // 2. ΚΟΙΝΟ AUDIO GRAPH (iOS-safe)
   // ==========================================
-  var MAX_IMAGE_W = 1600;  
-  var MAX_VIDEO_W = 640;     
-  var VIDEO_BITRATE = 1000000; 
+  var sharedAudioCtx = null;
+  var videoSourceNode = null, videoGainNode = null;
+
+  function ensureAudioCtx() {
+    if (!sharedAudioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      sharedAudioCtx = new AC();
+    }
+    if (sharedAudioCtx.state === 'suspended') { try { sharedAudioCtx.resume(); } catch(e){} }
+    return sharedAudioCtx;
+  }
+
+  // createMediaElementSource επιτρέπεται ΜΙΑ φορά ανά element.
+  // Το φτιάχνουμε μία φορά και δεν κλείνουμε ποτέ το context.
+  function getVideoChain(video) {
+    var ctx = ensureAudioCtx();
+    if (!ctx) return null;
+    if (!videoSourceNode) {
+      videoSourceNode = ctx.createMediaElementSource(video);
+      videoGainNode = ctx.createGain();
+      videoSourceNode.connect(videoGainNode);
+      videoGainNode.connect(ctx.destination);
+    }
+    videoGainNode.gain.setValueAtTime(1, ctx.currentTime);
+    return { ctx: ctx, gain: videoGainNode };
+  }
+
+  // ==========================================
+  // 3. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ
+  // ==========================================
+  var MAX_IMAGE_W = 1600;
+  var MAX_VIDEO_W = 640;
+  var VIDEO_BITRATE = 1000000;
 
   var processedFiles = [];
   var currentFile = null;
   var currentObjectURL = null;
   var previewURLs = [];
 
-  var canvas = $('imageCanvas'), ctx = canvas.getContext('2d', { alpha: false });
+  var canvas = $('imageCanvas'), ctx2d = canvas.getContext('2d', { alpha: false });
   var imgObj = null, isDrawing = false;
-  var blurSrc = document.createElement('canvas');  
+  var blurSrc = document.createElement('canvas');
   var imageHistory = [];
   var MAX_HISTORY = 15;
 
@@ -519,20 +618,44 @@
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  // --- Ενημέρωση Timeline Βίντεο ---
+  // --- ΔΙΟΡΘΩΣΗ 2: blur χωρίς ctx.filter (δεν υπάρχει σε Safari < iOS 17).
+  // Downscale -> upscale σε δύο περάσματα. Δουλεύει παντού.
+  function buildBlurSource() {
+    blurSrc.width = canvas.width;
+    blurSrc.height = canvas.height;
+    var bctx = blurSrc.getContext('2d', { alpha: false });
+    bctx.imageSmoothingEnabled = true;
+
+    var midW = Math.max(2, Math.round(canvas.width / 6));
+    var midH = Math.max(2, Math.round(canvas.height / 6));
+    var mid = document.createElement('canvas');
+    mid.width = midW; mid.height = midH;
+    var mctx = mid.getContext('2d', { alpha: false });
+    mctx.imageSmoothingEnabled = true;
+    mctx.drawImage(canvas, 0, 0, midW, midH);
+
+    var smallW = Math.max(2, Math.round(canvas.width / 26));
+    var smallH = Math.max(2, Math.round(canvas.height / 26));
+    var small = document.createElement('canvas');
+    small.width = smallW; small.height = smallH;
+    var sctx = small.getContext('2d', { alpha: false });
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(mid, 0, 0, midW, midH, 0, 0, smallW, smallH);
+
+    bctx.drawImage(small, 0, 0, smallW, smallH, 0, 0, blurSrc.width, blurSrc.height);
+  }
+
   function updateVideoTimeline() {
     var timeline = $('videoTimeline');
     if (!timeline) return;
     timeline.innerHTML = '';
-    var video = $('videoPreview');
-    var duration = video.duration;
+    var duration = $('videoPreview').duration;
     if (!duration || isNaN(duration) || duration <= 0) return;
 
     document.querySelectorAll('#videoRangeList .range-item').forEach(function(row) {
       var s = parseFloat(row.querySelector('.r-start').value);
       var e = parseFloat(row.querySelector('.r-end').value);
       var blur = row.querySelector('.r-blur').checked;
-
       if (isNaN(s) || isNaN(e) || e <= s) return;
 
       var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
@@ -546,19 +669,16 @@
     });
   }
 
-  // --- Ενημέρωση Timeline Ήχου ---
   function updateAudioTimeline() {
     var timeline = $('audioTimeline');
     if (!timeline) return;
     timeline.innerHTML = '';
-    var audio = $('audioPreview');
-    var duration = audio.duration;
-    if (!duration || isNaN(duration) || duration <= 0) return;
+    var duration = $('audioPreview').duration;
+    if (!duration || isNaN(duration) || duration <= 0 || !isFinite(duration)) return;
 
     document.querySelectorAll('#audioMuteList .mute-item').forEach(function(row) {
       var s = parseFloat(row.querySelector('.mute-start').value);
       var e = parseFloat(row.querySelector('.mute-end').value);
-
       if (isNaN(s) || isNaN(e) || e <= s) return;
 
       var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
@@ -572,29 +692,25 @@
     });
   }
 
-  // --- Διαχείριση Σημείων Ήχου (Stamps) ---
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
-    div.innerHTML = `Από: <input type="number" step="0.1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
-                     Έως: <input type="number" step="0.1" min="0" class="mute-end" value="${end != null ? end : ''}">s 
-                     <button class="delrow" style="margin-left:auto; background:#d9534f; color:#fff; padding:4px 8px; font-size:12px; border-radius:4px;">✕</button>`;
+    div.innerHTML = 'Από: <input type="number" step="0.1" min="0" class="mute-start" value="' + (start != null ? start : '') + '">s ' +
+                    'Έως: <input type="number" step="0.1" min="0" class="mute-end" value="' + (end != null ? end : '') + '">s ' +
+                    '<button class="delrow" style="margin-left:auto; padding:4px 8px; font-size:12px;">✕</button>';
     $('audioMuteList').appendChild(div);
     updateAudioTimeline();
   }
 
   $('addAudioRangeBtn').onclick = function() { addAudioMuteRow(); };
-  
+
   $('audioMuteList').addEventListener('click', function(e) {
     var b = e.target.closest('button');
-    if (b && b.classList.contains('delrow')) {
-      b.closest('.mute-item').remove();
-      updateAudioTimeline();
-    }
+    if (b && b.classList.contains('delrow')) { b.closest('.mute-item').remove(); updateAudioTimeline(); }
   });
-  $('audioMuteList').addEventListener('input', function() { updateAudioTimeline(); });
-  $('audioMuteList').addEventListener('change', function() { updateAudioTimeline(); });
+  $('audioMuteList').addEventListener('input', updateAudioTimeline);
+  $('audioMuteList').addEventListener('change', updateAudioTimeline);
+  $('audioPreview').addEventListener('loadedmetadata', updateAudioTimeline);
 
-  // --- Διαστήματα Βίντεο (Stamps) ---
   function addVideoRangeRow(start, end, mute, blur) {
     var div = document.createElement('div'); div.className = 'range-item';
     div.innerHTML =
@@ -624,9 +740,8 @@
       updateVideoTimeline();
     }
   });
-
-  $('videoRangeList').addEventListener('input', function() { updateVideoTimeline(); });
-  $('videoRangeList').addEventListener('change', function() { updateVideoTimeline(); });
+  $('videoRangeList').addEventListener('input', updateVideoTimeline);
+  $('videoRangeList').addEventListener('change', updateVideoTimeline);
 
   $('videoPreview').addEventListener('timeupdate', function () {
     $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's';
@@ -646,39 +761,69 @@
     return out;
   }
 
-  window.cancelStory = function() {
+  function readAudioRanges() {
+    var out = [];
+    document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
+      var s = parseFloat(el.querySelector('.mute-start').value);
+      var e = parseFloat(el.querySelector('.mute-end').value);
+      if (!isNaN(s) && !isNaN(e) && e > s) out.push({ s: s, e: e });
+    });
+    return out;
+  }
+
+  $('cancelStoryBtn').onclick = function() {
     $('uploadSheet').classList.remove('on');
     $('storyTitle').value = '';
     processedFiles = [];
     updateMediaListUI();
     setAR(true);
+    resumeARCamera();
   };
 
-  $('addBtn').onclick = () => { if(me) { $('uploadSheet').classList.add('on'); setAR(false); } };
-  $('triggerFileBtn').onclick = () => $('singleFileInput').click();
+  $('addBtn').onclick = function() { if (me) { $('uploadSheet').classList.add('on'); setAR(false); } };
+  $('triggerFileBtn').onclick = function() { $('singleFileInput').click(); };
 
-  // --- ΖΩΝΤΑΝΗ ΗΧΟΓΡΑΦΗΣΗ ΑΡΧΕΙΟΥ ---
-  var mediaRecorder = null;
-  var audioChunks = [];
-  var recTimerInterval = null;
-  var recSeconds = 0;
+  // --- ΔΙΟΡΘΩΣΗ 3γ: ζωντανή ηχογράφηση με σωστό mime ανά browser ---
+  var mediaRecorder = null, audioChunks = [], recTimerInterval = null, recSeconds = 0;
 
-  $('recordAudioBtn').onclick = async function() {
-    try {
-      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  function pickAudioMime() {
+    var list = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+    for (var i = 0; i < list.length; i++) {
+      try { if (MediaRecorder.isTypeSupported(list[i])) return list[i]; } catch(e){}
+    }
+    return '';
+  }
+
+  $('recordAudioBtn').onclick = function() {
+    if (!window.MediaRecorder) { alert('Ο browser δεν υποστηρίζει ηχογράφηση.'); return; }
+
+    // Το iOS δεν επιτρέπει κάμερα + μικρόφωνο ταυτόχρονα.
+    stopARCamera();
+    ensureAudioCtx();
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
       audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
+      var mime = pickAudioMime();
+      try {
+        mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      } catch (e) {
+        mediaRecorder = new MediaRecorder(stream);
+      }
 
       mediaRecorder.ondataavailable = function(e) {
         if (e.data && e.data.size > 0) audioChunks.push(e.data);
       };
 
       mediaRecorder.onstop = function() {
-        stream.getTracks().forEach(track => track.stop());
-        
-        var audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        var fileName = "ηχογράφηση_" + new Date().toISOString().slice(0,10) + ".wav";
-        var recordedFile = new File([audioBlob], fileName, { type: 'audio/wav' });
+        stream.getTracks().forEach(function(t){ t.stop(); });
+
+        var type = mediaRecorder.mimeType || mime || 'audio/mp4';
+        var base = type.split(';')[0];
+        var ext = base.indexOf('mp4') > -1 ? 'm4a' : (base.indexOf('ogg') > -1 ? 'ogg' : 'webm');
+
+        var audioBlob = new Blob(audioChunks, { type: base });
+        var fileName = 'ηχογράφηση_' + new Date().toISOString().slice(0,10) + '_' + Date.now() + '.' + ext;
+        var recordedFile = new File([audioBlob], fileName, { type: base });
 
         $('recorderModal').classList.remove('on');
         loadFileIntoEditor(recordedFile, null);
@@ -686,38 +831,37 @@
 
       $('recorderModal').classList.add('on');
       recSeconds = 0;
-      $('recStatusTimer').textContent = "00:00";
-      
+      $('recStatusTimer').textContent = '00:00';
       recTimerInterval = setInterval(function() {
         recSeconds++;
-        var m = String(Math.floor(recSeconds / 60)).padStart(2, '0');
-        var s = String(recSeconds % 60).padStart(2, '0');
-        $('recStatusTimer').textContent = m + ":" + s;
+        var m = String(Math.floor(recSeconds / 60));
+        var s = String(recSeconds % 60);
+        $('recStatusTimer').textContent = (m.length < 2 ? '0'+m : m) + ':' + (s.length < 2 ? '0'+s : s);
       }, 1000);
 
       mediaRecorder.start();
-    } catch (err) {
-      alert("Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο: " + (err.message || err));
-    }
+    }).catch(function(err) {
+      resumeARCamera();
+      alert('Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο: ' + (err.message || err));
+    });
   };
 
   $('stopRecBtn').onclick = function() {
     clearInterval(recTimerInterval);
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-    }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   };
 
   $('cancelRecBtn').onclick = function() {
     clearInterval(recTimerInterval);
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
-      mediaRecorder.stop();
+      try { mediaRecorder.stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+      mediaRecorder.onstop = null;
+      try { mediaRecorder.stop(); } catch(e){}
     }
     $('recorderModal').classList.remove('on');
+    $('uploadSheet').classList.add('on');
   };
 
-  // Φόρτωση αρχείου στον editor
   function loadFileIntoEditor(file, savedMeta) {
     currentFile = file;
     setAR(false);
@@ -730,147 +874,168 @@
     $('audioEditor').style.display = 'none';
     $('audioMuteList').innerHTML = '';
     $('videoRangeList').innerHTML = '';
-    if ($('videoTimeline')) $('videoTimeline').innerHTML = '';
-    if ($('audioTimeline')) $('audioTimeline').innerHTML = '';
+    $('videoTimeline').innerHTML = '';
+    $('audioTimeline').innerHTML = '';
 
-    if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
+    if (currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(file);
 
-    if(file.type.startsWith('image/')) {
+    if (file.type.indexOf('image/') === 0) {
       $('imageEditor').style.display = 'block';
       imageHistory = [];
       imgObj = new Image();
-      imgObj.onload = () => {
+      imgObj.onload = function() {
         var k = Math.min(1, MAX_IMAGE_W / imgObj.width);
         canvas.width = Math.round(imgObj.width * k);
         canvas.height = Math.round(imgObj.height * k);
-        ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
-
-        blurSrc.width = canvas.width; 
-        blurSrc.height = canvas.height;
-        var bctx = blurSrc.getContext('2d');
-        
-        bctx.drawImage(canvas, 0, 0);
-        try {
-          bctx.filter = 'blur(16px)';
-          bctx.drawImage(blurSrc, 0, 0);
-          bctx.filter = 'none';
-        } catch(err) {
-          bctx.drawImage(canvas, 0, 0, blurSrc.width, blurSrc.height);
-        }
+        ctx2d.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
+        buildBlurSource();
       };
       imgObj.src = currentObjectURL;
     }
-    else if(file.type.startsWith('video/')) {
+    else if (file.type.indexOf('video/') === 0) {
       $('videoEditor').style.display = 'block';
-      var vid = $('videoPreview'); 
+      var vid = $('videoPreview');
+      vid.muted = false;
       $('vTimeNow').textContent = 'Φόρτωση βίντεο...';
       vid.src = currentObjectURL;
       vid.load();
       vid.onloadedmetadata = function() {
         $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
-          savedMeta.ranges.forEach(r => addVideoRangeRow(r.s, r.e, r.mute, r.blur));
+          savedMeta.ranges.forEach(function(r){ addVideoRangeRow(r.s, r.e, r.mute, r.blur); });
         } else {
           addVideoRangeRow();
         }
         updateVideoTimeline();
       };
     }
-    else if(file.type.startsWith('audio/')) {
+    else if (file.type.indexOf('audio/') === 0) {
       $('audioEditor').style.display = 'block';
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
       aud.load();
       aud.onloadedmetadata = function() {
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
-          savedMeta.ranges.forEach(r => addAudioMuteRow(r.s, r.e));
+          savedMeta.ranges.forEach(function(r){ addAudioMuteRow(r.s, r.e); });
         } else {
           addAudioMuteRow();
         }
         updateAudioTimeline();
       };
+      fixDuration(aud);
     }
   }
 
-  $('singleFileInput').onchange = function(e) {
-    if(this.files.length === 0) return;
+  $('singleFileInput').onchange = function() {
+    if (this.files.length === 0) return;
     var f = this.files[0];
     this.value = '';
     loadFileIntoEditor(f, null);
   };
 
   function getMousePos(e) {
-    var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-    var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    var cX = e.touches ? e.touches[0].clientX : e.clientX;
+    var cY = e.touches ? e.touches[0].clientY : e.clientY;
     return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
   }
+
   function drawBlur(pos) {
     var r = Math.max(24, canvas.width * 0.05);
-    ctx.save();
-    ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI*2); ctx.clip();
-    ctx.drawImage(blurSrc, 0, 0);
-    ctx.restore();
+    ctx2d.save();
+    ctx2d.beginPath(); ctx2d.arc(pos.x, pos.y, r, 0, Math.PI*2); ctx2d.clip();
+    ctx2d.drawImage(blurSrc, 0, 0);
+    ctx2d.restore();
   }
-  canvas.onpointerdown = e => {
+
+  canvas.addEventListener('pointerdown', function(e) {
+    e.preventDefault();
     isDrawing = true;
-    imageHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    imageHistory.push(ctx2d.getImageData(0, 0, canvas.width, canvas.height));
     if (imageHistory.length > MAX_HISTORY) imageHistory.shift();
     drawBlur(getMousePos(e));
-    canvas.setPointerCapture(e.pointerId);
-  };
-  canvas.onpointermove = e => { if(isDrawing) drawBlur(getMousePos(e)); };
-  canvas.onpointerup = () => isDrawing = false;
-  canvas.onpointercancel = () => isDrawing = false;
+    try { canvas.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  canvas.addEventListener('pointermove', function(e) {
+    if (!isDrawing) return;
+    e.preventDefault();
+    drawBlur(getMousePos(e));
+  });
+  canvas.addEventListener('pointerup', function(){ isDrawing = false; });
+  canvas.addEventListener('pointercancel', function(){ isDrawing = false; });
+  canvas.addEventListener('touchstart', function(e){ e.preventDefault(); }, { passive: false });
+  canvas.addEventListener('touchmove', function(e){ e.preventDefault(); }, { passive: false });
 
-  $('undoBlurBtn').onclick = () => {
-    if (imageHistory.length > 0) ctx.putImageData(imageHistory.pop(), 0, 0);
+  $('undoBlurBtn').onclick = function() {
+    if (imageHistory.length > 0) ctx2d.putImageData(imageHistory.pop(), 0, 0);
   };
 
-  $('cancelSingleBtn').onclick = () => {
+  $('cancelSingleBtn').onclick = function() {
     currentFile = null;
-    try { $('videoPreview').pause(); $('audioPreview').pause(); } catch(e){}
+    try { $('videoPreview').pause(); } catch(e){}
+    try { $('audioPreview').pause(); } catch(e){}
     $('editorSheet').classList.remove('on');
     $('uploadSheet').classList.add('on');
   };
 
-  $('saveFileBtn').onclick = async function() {
+  // ΔΙΟΡΘΩΣΗ 3δ: play() + resume() ΜΕΣΑ στο click, όχι σε .then().
+  $('saveFileBtn').onclick = function() {
     if (!currentFile) return;
+
+    if (currentFile.type.indexOf('video/') === 0) {
+      var ranges = readVideoRanges();
+      if (ranges.length > 0) {
+        ensureAudioCtx();
+        var v = $('videoPreview');
+        v.muted = false;
+        getVideoChain(v);
+        try { v.play().catch(function(){}); } catch(e){}
+      }
+    }
+    doSaveFile();
+  };
+
+  function doSaveFile() {
     showProgress(true, 'Επεξεργασία αρχείου…', 0);
 
-    try {
-      var savedMeta = { ranges: [] };
-      if (currentFile.type.startsWith('video/')) {
-        savedMeta.ranges = readVideoRanges();
-      } else if (currentFile.type.startsWith('audio/')) {
-        document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
-          var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-          if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
-        });
-      }
+    var savedMeta = { ranges: [] };
+    var job;
 
-      if (currentFile.type.startsWith('image/')) {
-        var blob = await new Promise(function(res){ canvas.toBlob(res, 'image/jpeg', 0.82); });
-        processedFiles.push({ name: currentFile.name, type: 'image/jpeg', blob: blob, meta: savedMeta });
-      }
-      else if (currentFile.type.startsWith('video/')) {
-        var vblob = await processVideoLocal(currentFile);
+    if (currentFile.type.indexOf('image/') === 0) {
+      job = new Promise(function(res){ canvas.toBlob(res, 'image/jpeg', 0.82); })
+        .then(function(blob) {
+          processedFiles.push({ name: currentFile.name, type: 'image/jpeg', blob: blob, meta: savedMeta });
+        });
+    }
+    else if (currentFile.type.indexOf('video/') === 0) {
+      savedMeta.ranges = readVideoRanges();
+      job = processVideoLocal(currentFile).then(function(vblob) {
         processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
-      }
-      else if (currentFile.type.startsWith('audio/')) {
-        var ablob = await processAudioLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: ablob, meta: savedMeta });
-      }
-      updateMediaListUI();
-    } catch (e) {
-      alert("Σφάλμα: " + (e && e.message ? e.message : e));
+      });
+    }
+    else if (currentFile.type.indexOf('audio/') === 0) {
+      savedMeta.ranges = readAudioRanges();
+      job = processAudioLocal(currentFile).then(function(ablob) {
+        processedFiles.push({ name: currentFile.name.replace(/\.[^.]+$/, '') + '.wav', type: 'audio/wav', blob: ablob, meta: savedMeta });
+      });
+    }
+    else {
+      job = Promise.resolve();
     }
 
-    showProgress(false);
-    $('editorSheet').classList.remove('on');
-    $('uploadSheet').classList.add('on');
-    currentFile = null;
-  };
+    job.then(function() {
+      updateMediaListUI();
+    }).catch(function(e) {
+      alert('Σφάλμα: ' + (e && e.message ? e.message : e));
+    }).then(function() {
+      showProgress(false);
+      $('editorSheet').classList.remove('on');
+      $('uploadSheet').classList.add('on');
+      currentFile = null;
+    });
+  }
 
   window.removeMedia = function(index) {
     processedFiles.splice(index, 1);
@@ -884,9 +1049,11 @@
       return;
     }
     var html = '';
-    processedFiles.forEach((f, i) => {
+    processedFiles.forEach(function(f, i) {
       var kb = f.blob ? Math.round(f.blob.size/1024) : 0;
-      html += `<div class="media-list-item"><span>${i+1}. ${f.name} <small style="color:#666">(${kb} KB)</small></span><div><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div></div>`;
+      html += '<div class="media-list-item"><span>' + (i+1) + '. ' + f.name +
+              ' <small style="color:#666">(' + kb + ' KB)</small></span>' +
+              '<div><button class="delete-media-btn" onclick="removeMedia(' + i + ')">Διαγραφή</button></div></div>';
     });
     list.innerHTML = html;
   }
@@ -896,14 +1063,14 @@
     if (!f) return;
     $('previewSheet').classList.remove('on');
     var fileObj = new File([f.blob], f.name, { type: f.type });
-    loadFileIntoEditor(fileObj, f.meta);
     processedFiles.splice(index, 1);
+    loadFileIntoEditor(fileObj, f.meta);
   };
 
   $('finishStoryBtn').onclick = function() {
     var title = $('storyTitle').value;
-    if (!title) return alert("Βάλε έναν τίτλο για την ιστορία σου.");
-    if (processedFiles.length === 0) return alert("Πρόσθεσε τουλάχιστον ένα αρχείο.");
+    if (!title) return alert('Βάλε έναν τίτλο για την ιστορία σου.');
+    if (processedFiles.length === 0) return alert('Πρόσθεσε τουλάχιστον ένα αρχείο.');
 
     $('uploadSheet').classList.remove('on');
     var container = $('localPreviewContainer');
@@ -911,46 +1078,46 @@
     previewURLs.forEach(function(u){ URL.revokeObjectURL(u); });
     previewURLs = [];
 
-    processedFiles.forEach((f, i) => {
+    processedFiles.forEach(function(f, i) {
       var itemBox = document.createElement('div');
-      itemBox.style.cssText = "background:#f0f0f0; padding:10px; border-radius:6px; color:#333;";
-      itemBox.innerHTML = `<p style="margin:0 0 5px; font-weight:bold;">${i+1}. ${f.name}</p>`;
+      itemBox.style.cssText = 'background:#f0f0f0; padding:10px; border-radius:6px; color:#333;';
+      itemBox.innerHTML = '<p style="margin:0 0 5px; font-weight:bold;">' + (i+1) + '. ' + f.name + '</p>';
       var blobUrl = URL.createObjectURL(f.blob);
       previewURLs.push(blobUrl);
 
-      if (f.type.startsWith('image/')) {
-        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">`;
-      } else if (f.type.startsWith('video/')) {
-        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>`;
-      } else if (f.type.startsWith('audio/')) {
-        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
+      if (f.type.indexOf('image/') === 0) {
+        itemBox.innerHTML += '<img src="' + blobUrl + '" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">';
+      } else if (f.type.indexOf('video/') === 0) {
+        itemBox.innerHTML += '<video src="' + blobUrl + '" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>';
+      } else if (f.type.indexOf('audio/') === 0) {
+        itemBox.innerHTML += '<audio src="' + blobUrl + '" controls playsinline preload="metadata" style="width:100%; margin-bottom:5px;"></audio>';
       }
-      
-      itemBox.innerHTML += `<button class="edit-media-btn" onclick="editSavedMedia(${i})" style="width:100%; padding:8px; margin-top:5px; background:var(--sea); color:white; border-radius:4px; font-weight:bold;">✏️ Ξανά-επεξεργασία αυτού του αρχείου</button>`;
-      
+
+      itemBox.innerHTML += '<button class="edit-media-btn" onclick="editSavedMedia(' + i + ')" style="width:100%; padding:8px; margin-top:5px; background:var(--sea); color:white; border-radius:4px; font-weight:bold;">✏️ Ξανά-επεξεργασία αυτού του αρχείου</button>';
       container.appendChild(itemBox);
     });
 
-    container.querySelectorAll('video').forEach(fixDuration);
+    container.querySelectorAll('video, audio').forEach(fixDuration);
 
     $('previewSheet').classList.add('on');
     setAR(false);
   };
 
   function fixDuration(v) {
-    v.addEventListener('loadedmetadata', function once() {
-      if (v.duration !== Infinity) return;
+    v.addEventListener('loadedmetadata', function() {
+      if (v.duration !== Infinity && !isNaN(v.duration)) return;
       v.currentTime = 1e6;
       v.addEventListener('timeupdate', function tu() {
         v.removeEventListener('timeupdate', tu);
         v.currentTime = 0;
+        updateAudioTimeline();
       });
     }, { once: true });
   }
 
   $('closePreviewBtn').onclick = function() {
     var container = $('localPreviewContainer');
-    container.querySelectorAll('video, audio').forEach(media => {
+    container.querySelectorAll('video, audio').forEach(function(media) {
       media.pause();
       media.removeAttribute('src');
       media.load();
@@ -960,6 +1127,7 @@
     previewURLs = [];
     $('previewSheet').classList.remove('on');
     setAR(true);
+    resumeARCamera();
   };
 
   // --- Επεξεργαστής Βίντεο ---
@@ -970,31 +1138,18 @@
       var video = $('videoPreview');
       var ranges = readVideoRanges();
 
-      if (ranges.length === 0) { 
-        setAR(true); 
-        resolve(file); 
-        return; 
-      }
+      if (ranges.length === 0) { resolve(file); return; }
+      if (!window.MediaRecorder || !document.createElement('canvas').captureStream) { resolve(file); return; }
 
-      if (!window.MediaRecorder) { 
-        setAR(true);
-        resolve(file); 
-        return; 
-      }
-      
       var mime = [
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus',
-        'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
         'video/mp4',
         'video/webm'
       ].filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
-      
-      if (!mime) { 
-        setAR(true);
-        reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); 
-        return; 
-      }
+
+      if (!mime) { reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); return; }
 
       var blurRanges = ranges.filter(function (r) { return r.blur; });
       var muteRanges = ranges.filter(function (r) { return r.mute; });
@@ -1015,40 +1170,35 @@
       var sctx = scratch.getContext('2d', { alpha: false });
       sctx.imageSmoothingEnabled = true;
 
-      var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var sourceNode = audioCtx.createMediaElementSource(video);
-      var gainNode = audioCtx.createGain();
+      // Κοινό, μόνιμο audio graph — ΔΕΝ δημιουργούμε/κλείνουμε context εδώ.
+      var chain = getVideoChain(video);
+      if (!chain) { reject(new Error('Δεν υποστηρίζεται το Web Audio API.')); return; }
+      var audioCtx = chain.ctx, gainNode = chain.gain;
       var destNode = audioCtx.createMediaStreamDestination();
-      
-      sourceNode.connect(gainNode);
       gainNode.connect(destNode);
-      gainNode.connect(audioCtx.destination);
-      gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
 
       var vTracks = oCanvas.captureStream(30).getVideoTracks();
       var aTracks = destNode.stream.getAudioTracks();
       var stream = new MediaStream(vTracks.concat(aTracks));
 
-      var rec;
-      try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); }
-      catch (e) { 
-        setAR(true);
-        try { audioCtx.close(); } catch(e){}
-        reject(new Error('MediaRecorder: ' + e.message)); 
-        return; 
+      function cleanupAudio() {
+        try { gainNode.disconnect(destNode); } catch(e){}
+        try { gainNode.gain.setValueAtTime(1, audioCtx.currentTime); } catch(e){}
       }
 
-      var chunks = [], running = true, finished = false, lastUI = 0;
+      var rec;
+      try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: VIDEO_BITRATE }); }
+      catch (e) { cleanupAudio(); reject(new Error('MediaRecorder: ' + e.message)); return; }
+
+      var chunks = [], running = true, finished = false, lastUI = 0, lastMute = null;
       rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
-      
+
       rec.onstop = function () {
         if (finished) return; finished = true;
         running = false;
         try { video.pause(); } catch (e) {}
         video.onended = null;
-        try { audioCtx.close(); } catch(e){}
-        
-        setAR(true);
+        cleanupAudio();
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
 
@@ -1074,18 +1224,17 @@
         if (!running) return;
         drawFrame();
 
-        var t = video.currentTime;
-        var shouldMute = false;
+        var t = video.currentTime, shouldMute = false;
         for (var i = 0; i < muteRanges.length; i++) {
-          if (t >= muteRanges[i].s && t < muteRanges[i].e) {
-            shouldMute = true;
-            break;
-          }
+          if (t >= muteRanges[i].s && t < muteRanges[i].e) { shouldMute = true; break; }
         }
-        gainNode.gain.setValueAtTime(shouldMute ? 0 : 1, audioCtx.currentTime);
+        if (shouldMute !== lastMute) {
+          lastMute = shouldMute;
+          gainNode.gain.setValueAtTime(shouldMute ? 0 : 1, audioCtx.currentTime);
+        }
 
         var now = performance.now();
-        if (now - lastUI > 250) {  
+        if (now - lastUI > 250) {
           lastUI = now;
           if (video.duration && isFinite(video.duration)) {
             showProgress(true, 'Εγγραφή: ' + Math.round(video.currentTime) + 's / ' + Math.round(video.duration) + 's',
@@ -1110,24 +1259,21 @@
       showProgress(true, 'Προθέρμανση…', 0);
 
       seekToStart().then(function () {
-        drawFrame();                         
-        return Promise.resolve(video.play());
-      }).then(function () {
-        if (audioCtx.state === 'suspended') return audioCtx.resume();
+        drawFrame();
+        if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch(e){} }
+        return video.play();
       }).then(function () {
         var primed = 0;
         (function prime() {
           drawFrame();
           if (++primed < 4) { nextFrame(prime); return; }
-
           video.onended = stopAll;
           rec.start(1000);
           loop();
         })();
       }).catch(function (err) {
         running = false;
-        setAR(true); 
-        try { audioCtx.close(); } catch(e){}
+        cleanupAudio();
         reject(new Error('Δεν ξεκίνησε η αναπαραγωγή: ' + (err && err.message ? err.message : err)));
       });
     });
@@ -1138,40 +1284,58 @@
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
       reader.onerror = function(){ reject(new Error('Αποτυχία ανάγνωσης αρχείου.')); };
-      reader.onload = async function(e) {
-        try {
-          var aCtx = new (window.AudioContext || window.webkitAudioContext)();
-          var aBuf = await aCtx.decodeAudioData(e.target.result);
-          aCtx.close();
+      reader.onload = function(e) {
+        var aCtx = ensureAudioCtx();
+        if (!aCtx) { reject(new Error('Δεν υποστηρίζεται το Web Audio API.')); return; }
 
-          var mRanges = [];
-          document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
-            var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
-          });
+        // Safari: decodeAudioData χωρίς Promise σε παλιές εκδόσεις -> callback form
+        var decoded = function(aBuf) {
+          try {
+            var mRanges = readAudioRanges();
+            var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+            var oCtx = new OAC(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
+            var src = oCtx.createBufferSource(); src.buffer = aBuf;
+            var gain = oCtx.createGain(); gain.gain.setValueAtTime(1, 0);
+            mRanges.forEach(function(r) {
+              gain.gain.setValueAtTime(1, Math.max(0, r.s - 0.01));
+              gain.gain.setValueAtTime(0, r.s);
+              gain.gain.setValueAtTime(0, r.e);
+              gain.gain.setValueAtTime(1, r.e + 0.01);
+            });
+            src.connect(gain); gain.connect(oCtx.destination); src.start(0);
 
-          var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
-          var src = oCtx.createBufferSource(); src.buffer = aBuf;
-          var gain = oCtx.createGain(); gain.gain.setValueAtTime(1, 0);
-          mRanges.forEach(function(r){ gain.gain.setValueAtTime(1, Math.max(0, r.s-0.01)); gain.gain.setValueAtTime(0, r.s); gain.gain.setValueAtTime(0, r.e); gain.gain.setValueAtTime(1, r.e+0.01); });
-          src.connect(gain); gain.connect(oCtx.destination); src.start(0);
+            var done = function(renBuf) {
+              var numCh = renBuf.numberOfChannels;
+              var len = renBuf.length*numCh*2 + 44;
+              var buf = new ArrayBuffer(len), view = new DataView(buf), pos = 0;
+              var set16 = function(d){ view.setUint16(pos, d, true); pos += 2; };
+              var set32 = function(d){ view.setUint32(pos, d, true); pos += 4; };
 
-          var renBuf = await oCtx.startRendering();
-          var numCh = renBuf.numberOfChannels, len = renBuf.length*numCh*2+44, buf = new ArrayBuffer(len), view = new DataView(buf), pos=0;
-          var set16 = function(d){ view.setUint16(pos, d, true); pos+=2; }, set32 = function(d){ view.setUint32(pos, d, true); pos+=4; };
+              set32(0x46464952); set32(len-8); set32(0x45564157); set32(0x20746d66);
+              set32(16); set16(1); set16(numCh);
+              set32(renBuf.sampleRate); set32(renBuf.sampleRate*2*numCh);
+              set16(numCh*2); set16(16); set32(0x61746164); set32(len-pos-4);
 
-          set32(0x46464952); set32(len-8); set32(0x45564157); set32(0x20746d66); set32(16); set16(1); set16(numCh);
-          set32(renBuf.sampleRate); set32(renBuf.sampleRate*2*numCh); set16(numCh*2); set16(16); set32(0x61746164); set32(len-pos-4);
+              var chs = []; for (var i=0; i<numCh; i++) chs.push(renBuf.getChannelData(i));
+              for (var offset=0; offset<renBuf.length; offset++) {
+                for (var c=0; c<numCh; c++) {
+                  var smp = Math.max(-1, Math.min(1, chs[c][offset]));
+                  set16((smp<0 ? smp*32768 : smp*32767)|0);
+                }
+              }
+              resolve(new Blob([buf], {type: 'audio/wav'}));
+            };
 
-          var chs = []; for(var i=0; i<numCh; i++) chs.push(renBuf.getChannelData(i));
-          for(var offset=0; offset<renBuf.length; offset++) {
-            for(var c=0; c<numCh; c++) {
-              var smp = Math.max(-1, Math.min(1, chs[c][offset]));
-              set16((smp<0 ? smp*32768 : smp*32767)|0);
-            }
-          }
-          resolve(new Blob([buf], {type: "audio/wav"}));
-        } catch(err) { reject(err); }
+            var p = oCtx.startRendering();
+            if (p && p.then) p.then(done).catch(reject);
+            else oCtx.oncomplete = function(ev){ done(ev.renderedBuffer); };
+          } catch(err) { reject(err); }
+        };
+
+        var dp = aCtx.decodeAudioData(e.target.result, decoded, function(err) {
+          reject(new Error('Δεν αποκωδικοποιήθηκε ο ήχος: ' + (err && err.message ? err.message : 'άγνωστο σφάλμα')));
+        });
+        if (dp && dp.then) dp.then(decoded).catch(function(){});
       };
       reader.readAsArrayBuffer(file);
     });
