@@ -118,20 +118,18 @@
 
   #mediaList { margin-bottom: 15px; }
   .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
-  .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
-  .edit-media-btn { background: var(--sea); color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 5px; }
+  .delete-media-btn { background: #d9534f; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  .edit-media-btn { background: var(--sea); color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 14px; cursor: pointer; margin-right: 5px; }
 
   /* Editor Canvas & Box */
   .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; touch-action: none; }
   #imageCanvas { width: 100%; display: block; touch-action: none; }
   #videoContainer { position: relative; width: 100%; }
-  #videoPreview { width: 100%; display: block; }
   
-  /* Timeline Σχεδίαση */
-  #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
-  .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
-  .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
-  .timeline-block.mute { background: rgba(217, 83, 79, 0.55); }
+  /* Blocks Timeline για Audio & Video */
+  .timeline-block { position: absolute; height: 100%; border-left: 1px solid #fff; border-right: 1px solid #fff; z-index: 2; }
+  .timeline-block.blur { background: rgba(240, 194, 68, 0.6); }
+  .timeline-block.mute { background: rgba(217, 83, 79, 0.6); }
 
   .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
   .range-item .rr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
@@ -141,7 +139,6 @@
   .range-item input[type="checkbox"] { width: 20px; height: 20px; }
   .nowbtn { background: var(--sea); color: var(--bone); padding: 6px 9px; font-size: 12px; border-radius: 4px; }
   .delrow { margin-left: auto; background: #d9534f; color: #fff; padding: 6px 10px; font-size: 13px; border-radius: 4px; }
-  #vTimeNow { font-family: monospace; font-size: 13px; color: var(--sea); margin: 6px 0 10px; }
 
   .mute-item { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; color: #333; }
   .mute-item input[type="number"] { width: 68px; padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
@@ -155,7 +152,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>44Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -235,7 +232,7 @@
 <div id="editorSheet" class="edit-sheet">
   <div class="sheet-inner" style="position: relative;">
     <h2 id="editorTitle">Επεξεργασία Αρχείου</h2>
-    <p id="editorFilename" style="font-size:13px; color:var(--sea); margin-top:-10px; margin-bottom:15px;">αρχείο.jpg</p>
+    <p id="editorFilename" style="font-size:13px; color:var(--sea); margin-top:-10px; margin-bottom:15px; word-break: break-all;">αρχείο.jpg</p>
 
     <!-- Editor Εικόνας (Blur) -->
     <div id="imageEditor" class="editor-box">
@@ -244,13 +241,21 @@
       <button id="undoBlurBtn" style="position:absolute; top:10px; right:10px; background:var(--chalk); color:var(--ink); padding:6px 12px; font-size:13px; font-weight:bold; border-radius:4px; z-index:10; pointer-events:auto;">↩ Αναίρεση</button>
     </div>
 
-    <!-- Editor Βίντεο -->
-    <div id="videoEditor" class="editor-box" style="background:#fff;">
-      <div id="videoContainer">
-        <video id="videoPreview" controls playsinline preload="metadata"></video>
+    <!-- Editor Βίντεο ΜΕ CUSTOM PLAYER -->
+    <div id="videoEditor" class="editor-box" style="background:transparent;">
+      <div id="videoContainer" style="position:relative;">
+        <video id="videoPreview" playsinline preload="metadata" style="width:100%; display:block; border-radius:6px 6px 0 0; cursor:pointer; background:#000;"></video>
+        <button id="vidPlayOverlayBtn" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:60px; height:60px; font-size:28px; display:flex; align-items:center; justify-content:center; pointer-events:none; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">▶</button>
       </div>
-      <div id="videoTimeline" class="media-timeline" title="Timeline βίντεο"></div>
-      <div id="vTimeNow">Τρέχον σημείο: 0.0s</div>
+
+      <div id="videoTimelineContainer" style="position:relative; width:100%; height:60px; background:#0A1F22; border-radius:0 0 6px 6px; margin-bottom:6px; overflow:hidden; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+        <canvas id="videoGridCanvas" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></canvas>
+        <div id="videoTimeline" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+        <div id="videoProgressFill" style="position:absolute; top:0; left:0; width:0%; height:100%; background:rgba(255,255,255,0.15); pointer-events:none; z-index:3;"></div>
+        <div id="videoPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8); display:none; z-index:4;"></div>
+      </div>
+
+      <div id="vTimeNow" style="font-family:monospace; font-size:13px; color:var(--sea); margin-bottom:12px;">Τρέχον σημείο: 0.0s / 0.0s</div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea); display:block;">Διαστήματα επεξεργασίας (Stamps)</label>
       <div id="videoRangeList"></div>
@@ -259,27 +264,13 @@
 
     <!-- Editor Ήχου ΜΕ ΕΝΣΩΜΑΤΩΜΕΝΟ PLAYER & ΧΡΟΝΟΜΕΤΡΟ -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
-      <!-- Το native player κρύφτηκε -->
       <audio id="audioPreview" style="display:none;"></audio>
-      
-      <!-- Μετρητής ακριβείας -->
       <div id="aTimeNow" style="font-family:monospace; font-size:13px; color:var(--sea); margin-bottom:6px;">Τρέχον σημείο: 0.0s / 0.0s</div>
-
-      <!-- Waveform & Player Container -->
       <div id="waveContainer" style="position:relative; width:100%; height:90px; background:#0A1F22; border-radius:6px; margin-bottom:10px; overflow:hidden; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-        <!-- Κυματομορφή (με ενσωματωμένο grid και νούμερα) -->
         <canvas id="audioWaveCanvas" style="position:absolute; inset:0; width:100%; height:100%; display:block;"></canvas>
-        
-        <!-- Περιοχές Κοπής / Timeline -->
         <div id="audioTimeline" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
-        
-        <!-- Γραμμή Προόδου (Σκιώδες Φίλτρο Που Γεμίζει) -->
-        <div id="audioProgressFill" style="position:absolute; top:0; left:0; width:0%; height:100%; background:rgba(255,255,255,0.15); pointer-events:none;"></div>
-        
-        <!-- Playhead (Λευκή Κάθετη Γραμμή) -->
-        <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8); display:none;"></div>
-
-        <!-- Κουμπί Play/Pause -->
+        <div id="audioProgressFill" style="position:absolute; top:0; left:0; width:0%; height:100%; background:rgba(255,255,255,0.15); pointer-events:none; z-index:3;"></div>
+        <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8); display:none; z-index:4;"></div>
         <button id="wavePlayBtn" style="position:absolute; left:12px; bottom:8px; background:var(--chalk); color:var(--ink); border:none; border-radius:50%; width:38px; height:38px; font-size:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); z-index:5;">▶</button>
       </div>
 
@@ -303,15 +294,19 @@
   <p style="font-size:12px; opacity:.7; margin-top:14px;">Εφαρμογή ρυθμίσεων. Μην κλειδώσεις την οθόνη.</p>
 </div>
 
-<!-- 3. Μενού Τοπικής Προβολής Αρχείων -->
+<!-- 3. Μενού Τοπικής Προβολής Αρχείων (Τελικό Preview) -->
 <div id="previewSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Τα Αρχεία σου (Τοπική Προβολή)</h2>
-    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου:</p>
+    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου.</p>
 
     <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
 
-    <button class="btn-primary" id="closePreviewBtn" style="width:100%;">Κλείσιμο Προβολής</button>
+    <div class="btn-row">
+      <!-- Το νέο κουμπί "Πίσω" -->
+      <button class="btn-secondary" id="backToUploadBtn">Πίσω στα αρχεία</button>
+      <button class="btn-primary" id="closePreviewBtn">Αποστολή ιστορίας</button>
+    </div>
   </div>
 </div>
 
@@ -595,6 +590,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
+  // === Σχεδίαση Custom Μπάρας Βίντεο ===
   function updateVideoTimeline() {
     var timeline = $('videoTimeline');
     if (!timeline) return;
@@ -603,21 +599,69 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var duration = video.duration;
     if (!duration || isNaN(duration) || duration <= 0) return;
 
+    var gridCanvas = $('videoGridCanvas');
+    var ctx = gridCanvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = gridCanvas.getBoundingClientRect();
+    var width = rect.width || gridCanvas.parentElement.clientWidth || 300;
+    var height = rect.height || 60;
+    
+    gridCanvas.width = width * dpr;
+    gridCanvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+
+    var interval = 1; 
+    if (duration > 120) interval = 30;
+    else if (duration > 60) interval = 15;
+    else if (duration > 20) interval = 5;
+    else if (duration > 10) interval = 2;
+
+    ctx.fillStyle = 'rgba(242, 237, 228, 0.8)';
+    ctx.font = '10px monospace';
+    ctx.textBaseline = 'top';
+
+    var topOffset = 18;
+
+    for (var t = 0; t <= duration; t += interval) {
+      var x = (t / duration) * width;
+      if (x < 10) ctx.textAlign = 'left';
+      else if (x > width - 15) ctx.textAlign = 'right';
+      else ctx.textAlign = 'center';
+      
+      ctx.fillText(t + 's', x, 4); 
+      ctx.fillStyle = 'rgba(242, 237, 228, 0.15)'; 
+      ctx.fillRect(x, topOffset, 1, height - topOffset);
+      ctx.fillStyle = 'rgba(242, 237, 228, 0.8)'; 
+    }
+
     document.querySelectorAll('#videoRangeList .range-item').forEach(function(row) {
       var s = parseFloat(row.querySelector('.r-start').value);
       var e = parseFloat(row.querySelector('.r-end').value);
       var blur = row.querySelector('.r-blur').checked;
+      var mute = row.querySelector('.r-mute').checked;
 
       if (isNaN(s) || isNaN(e) || e <= s) return;
 
       var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
       var widthPct = Math.max(0, Math.min(100 - leftPct, ((e - s) / duration) * 100));
 
-      var block = document.createElement('div');
-      block.className = 'timeline-block' + (blur ? ' blur' : '');
-      block.style.left = leftPct + '%';
-      block.style.width = widthPct + '%';
-      timeline.appendChild(block);
+      if (blur) {
+        var blockB = document.createElement('div');
+        blockB.className = 'timeline-block blur';
+        blockB.style.left = leftPct + '%';
+        blockB.style.width = widthPct + '%';
+        blockB.style.top = topOffset + 'px';
+        timeline.appendChild(blockB);
+      }
+      if (mute) {
+        var blockM = document.createElement('div');
+        blockM.className = 'timeline-block mute';
+        blockM.style.left = leftPct + '%';
+        blockM.style.width = widthPct + '%';
+        blockM.style.top = topOffset + 'px';
+        timeline.appendChild(blockM);
+      }
     });
   }
 
@@ -643,18 +687,17 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       block.className = 'timeline-block mute';
       block.style.left = leftPct + '%';
       block.style.width = widthPct + '%';
+      block.style.top = '16px';
       timeline.appendChild(block);
     });
   }
 
-  // === Σχεδίαση Κυματομορφής (Waveform) με GRID δευτερολέπτων ===
   function drawWaveform(buffer) {
     var waveCanvas = $('audioWaveCanvas');
     var waveCtx = waveCanvas.getContext('2d');
     var dpr = window.devicePixelRatio || 1;
     var rect = waveCanvas.getBoundingClientRect();
     
-    // Ασφάλεια αν το UI δεν έχει προλάβει να ανανεώσει τις διαστάσεις
     var width = rect.width || waveCanvas.parentElement.clientWidth || 300;
     var height = rect.height || 90;
 
@@ -663,15 +706,12 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     waveCtx.scale(dpr, dpr);
     waveCtx.clearRect(0, 0, width, height);
 
-    // Αφήνουμε χώρο (16px) στο επάνω μέρος για να γράφουμε τα δευτερόλεπτα
     var topOffset = 16;
     var waveHeight = height - topOffset;
     
-    // Κεντρική γραμμή κυματομορφής
     waveCtx.fillStyle = 'rgba(78, 140, 147, 0.3)';
     waveCtx.fillRect(0, topOffset + (waveHeight / 2) - 1, width, 2);
 
-    // Χρώμα κυματομορφής
     waveCtx.fillStyle = '#F0C244'; 
 
     var data = buffer.getChannelData(0); 
@@ -694,47 +734,36 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       waveCtx.fillRect(i, y1, 1, h);
     }
 
-    // --- Σχεδίαση Time Markers (Δευτερόλεπτα & Grid) ---
     var duration = buffer.duration;
-    
-    // Υπολογισμός διαστήματος με βάση τη συνολική διάρκεια
     var interval = 1; 
     if (duration > 120) interval = 30;
     else if (duration > 60) interval = 15;
     else if (duration > 20) interval = 5;
     else if (duration > 10) interval = 2;
 
-    waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; // Ανοιχτόχρωμο (bone)
+    waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; 
     waveCtx.font = '10px monospace';
     waveCtx.textBaseline = 'top';
 
     for (var t = 0; t <= duration; t += interval) {
       var x = (t / duration) * width;
-      
-      // Ευθυγράμμιση ώστε τα νούμερα στα άκρα να μην κόβονται
       if (x < 10) waveCtx.textAlign = 'left';
       else if (x > width - 15) waveCtx.textAlign = 'right';
       else waveCtx.textAlign = 'center';
       
-      // Κείμενο
       waveCtx.fillText(t + 's', x, 2);
       
-      // Κάθετη γραμμή (Grid) πάνω στην κυματομορφή
       waveCtx.fillStyle = 'rgba(242, 237, 228, 0.15)'; 
       waveCtx.fillRect(x, topOffset - 2, 1, height - topOffset + 2);
-      
-      // Επαναφορά χρώματος για το επόμενο κείμενο
       waveCtx.fillStyle = 'rgba(242, 237, 228, 0.8)'; 
     }
   }
 
-  // === ΛΕΙΤΟΥΡΓΙΚΟΤΗΤΑ ΕΝΣΩΜΑΤΩΜΕΝΟΥ PLAYER ===
-  
+  // === AUDIO PLAYER LOGIC ===
   $('wavePlayBtn').onclick = function(e) {
-    e.stopPropagation(); // Να μην πιάσει το click το waveContainer
+    e.stopPropagation(); 
     var aud = $('audioPreview');
-    if (aud.paused) aud.play();
-    else aud.pause();
+    if (aud.paused) aud.play(); else aud.pause();
   };
 
   $('waveContainer').onclick = function(e) {
@@ -745,19 +774,12 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var rect = this.getBoundingClientRect();
     var clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
     var pct = (clientX - rect.left) / rect.width;
-    
-    // Κάνουμε seeking βάσει του που έκανε κλικ ο χρήστης
     aud.currentTime = pct * aud.duration;
   };
 
-  $('audioPreview').addEventListener('play', function() {
-    $('wavePlayBtn').textContent = '⏸';
-  });
-
-  $('audioPreview').addEventListener('pause', function() {
-    $('wavePlayBtn').textContent = '▶';
-  });
-
+  $('audioPreview').addEventListener('play', function() { $('wavePlayBtn').textContent = '⏸'; });
+  $('audioPreview').addEventListener('pause', function() { $('wavePlayBtn').textContent = '▶'; });
+  
   $('audioPreview').addEventListener('timeupdate', function () {
     var playhead = $('audioPlayhead');
     var progress = $('audioProgressFill');
@@ -766,12 +788,45 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       playhead.style.display = 'block';
       playhead.style.left = pct + '%';
       progress.style.width = pct + '%';
-      
-      // Ενημέρωση κειμένου χρονομέτρου 
       $('aTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's / ' + this.duration.toFixed(1) + 's';
     }
   });
 
+  // === VIDEO PLAYER LOGIC ===
+  $('videoPreview').onclick = function() {
+    if (this.paused) this.play(); else this.pause();
+  };
+  
+  $('videoPreview').addEventListener('play', function() {
+    $('vidPlayOverlayBtn').style.display = 'none';
+  });
+  
+  $('videoPreview').addEventListener('pause', function() {
+    $('vidPlayOverlayBtn').style.display = 'flex';
+  });
+
+  $('videoTimelineContainer').onclick = function(e) {
+    var vid = $('videoPreview');
+    if (!vid.duration) return;
+    var rect = this.getBoundingClientRect();
+    var clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+    var pct = (clientX - rect.left) / rect.width;
+    vid.currentTime = pct * vid.duration;
+  };
+
+  $('videoPreview').addEventListener('timeupdate', function () {
+    var playhead = $('videoPlayhead');
+    var progress = $('videoProgressFill');
+    if (this.duration) {
+      var pct = (this.currentTime / this.duration) * 100;
+      playhead.style.display = 'block';
+      playhead.style.left = pct + '%';
+      progress.style.width = pct + '%';
+      $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's / ' + this.duration.toFixed(1) + 's';
+    }
+  });
+
+  // ΜΑΚΡΟΕΝΤΟΛΕΣ ΠΡΟΣΘΗΚΗΣ ΠΕΔΙΩΝ
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
     div.innerHTML = `Από: <input type="number" step="0.1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
@@ -825,10 +880,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
 
   $('videoRangeList').addEventListener('input', function() { updateVideoTimeline(); });
   $('videoRangeList').addEventListener('change', function() { updateVideoTimeline(); });
-
-  $('videoPreview').addEventListener('timeupdate', function () {
-    $('vTimeNow').textContent = 'Τρέχον σημείο: ' + this.currentTime.toFixed(1) + 's';
-  });
 
   function readVideoRanges() {
     var out = [];
@@ -971,12 +1022,14 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     }
     else if(file.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block';
-      var vid = $('videoPreview'); 
+      $('vidPlayOverlayBtn').style.display = 'flex';
       $('vTimeNow').textContent = 'Φόρτωση βίντεο...';
+      
+      var vid = $('videoPreview'); 
       vid.src = currentObjectURL;
       vid.load();
       vid.onloadedmetadata = function() {
-        $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s';
+        $('vTimeNow').textContent = 'Τρέχον σημείο: 0.0s / ' + vid.duration.toFixed(1) + 's';
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
           savedMeta.ranges.forEach(r => addVideoRangeRow(r.s, r.e, r.mute, r.blur));
         } else {
@@ -986,9 +1039,8 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       };
     }
     else {
-      // Άνοιγμα Ηχητικού Editor
       $('audioEditor').style.display = 'block';
-      $('wavePlayBtn').textContent = '▶'; // Μηδενισμός του κουμπιού
+      $('wavePlayBtn').textContent = '▶'; 
       $('aTimeNow').textContent = 'Φόρτωση ήχου...';
       
       var aud = $('audioPreview');
@@ -1004,7 +1056,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
         updateAudioTimeline();
       };
 
-      // Δημιουργία Κυματομορφής
       var waveCanvas = $('audioWaveCanvas');
       var waveCtx = waveCanvas.getContext('2d');
       waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
@@ -1092,26 +1143,36 @@ window.addEventListener('deviceorientationabsolute', function(e) {
 
     try {
       var savedMeta = { ranges: [] };
+      var baseType = 'audio';
+      
       if (currentFile.type.startsWith('video/')) {
+        baseType = 'video';
         savedMeta.ranges = readVideoRanges();
+      } else if (currentFile.type.startsWith('image/')) {
+        baseType = 'image';
       } else if (currentFile.type.startsWith('audio/') || currentFile.name.endsWith('.m4a') || currentFile.name.endsWith('.wav')) {
+        baseType = 'audio';
         document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
           var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
           if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
         });
       }
 
+      var typeGr = baseType === 'image' ? 'Εικόνα' : (baseType === 'video' ? 'Βίντεο' : 'Ήχος');
+      var count = processedFiles.filter(function(x){ return x.type.startsWith(baseType); }).length + 1;
+      var generatedDisplayName = typeGr + ' ' + count;
+
       if (currentFile.type.startsWith('image/')) {
         var blob = await new Promise(function(res){ canvas.toBlob(res, 'image/jpeg', 0.82); });
-        processedFiles.push({ name: currentFile.name, type: 'image/jpeg', blob: blob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, displayName: generatedDisplayName, type: 'image/jpeg', blob: blob, meta: savedMeta });
       }
       else if (currentFile.type.startsWith('video/')) {
         var vblob = await processVideoLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, displayName: generatedDisplayName, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
       }
       else {
         var ablob = await processAudioLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: ablob.type || 'audio/mp4', blob: ablob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, displayName: generatedDisplayName, type: ablob.type || 'audio/mp4', blob: ablob, meta: savedMeta });
       }
       updateMediaListUI();
     } catch (e) {
@@ -1129,6 +1190,15 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     updateMediaListUI();
   };
 
+  window.editFromUploadList = function(index) {
+    var f = processedFiles[index];
+    if (!f) return;
+    processedFiles.splice(index, 1);
+    updateMediaListUI(); 
+    var fileObj = new File([f.blob], f.name, { type: f.type });
+    loadFileIntoEditor(fileObj, f.meta);
+  };
+
   function updateMediaListUI() {
     var list = $('mediaList');
     if (processedFiles.length === 0) {
@@ -1138,19 +1208,18 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var html = '';
     processedFiles.forEach((f, i) => {
       var kb = f.blob ? Math.round(f.blob.size/1024) : 0;
-      html += `<div class="media-list-item"><span>${i+1}. ${f.name} <small style="color:#666">(${kb} KB)</small></span><div><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div></div>`;
+      html += `<div class="media-list-item">
+                 <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%;" title="${f.name}">
+                   ${i+1}. ${f.displayName} <small style="color:#666">(${kb} KB)</small>
+                 </span>
+                 <div style="flex-shrink:0;">
+                   <button class="edit-media-btn" onclick="editFromUploadList(${i})" title="Επεξεργασία αυτού του αρχείου">✏️</button>
+                   <button class="delete-media-btn" onclick="removeMedia(${i})" title="Διαγραφή">✕</button>
+                 </div>
+               </div>`;
     });
     list.innerHTML = html;
   }
-
-  window.editSavedMedia = function(index) {
-    var f = processedFiles[index];
-    if (!f) return;
-    $('previewSheet').classList.remove('on');
-    var fileObj = new File([f.blob], f.name, { type: f.type });
-    loadFileIntoEditor(fileObj, f.meta);
-    processedFiles.splice(index, 1);
-  };
 
   $('finishStoryBtn').onclick = function() {
     var title = $('storyTitle').value;
@@ -1166,19 +1235,17 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     processedFiles.forEach((f, i) => {
       var itemBox = document.createElement('div');
       itemBox.style.cssText = "background:#f0f0f0; padding:10px; border-radius:6px; color:#333;";
-      itemBox.innerHTML = `<p style="margin:0 0 5px; font-weight:bold;">${i+1}. ${f.name}</p>`;
+      itemBox.innerHTML = `<p style="margin:0 0 5px; font-weight:bold;">${i+1}. ${f.displayName}</p>`;
       var blobUrl = URL.createObjectURL(f.blob);
       previewURLs.push(blobUrl);
 
       if (f.type.startsWith('image/')) {
-        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">`;
+        itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px;">`;
       } else if (f.type.startsWith('video/')) {
-        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>`;
+        itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px;"></video>`;
       } else {
-        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
+        itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%;"></audio>`;
       }
-      
-      itemBox.innerHTML += `<button class="edit-media-btn" onclick="editSavedMedia(${i})" style="width:100%; padding:8px; margin-top:5px; background:var(--sea); color:white; border-radius:4px; font-weight:bold;">✏️ Ξανά-επεξεργασία αυτού του αρχείου</button>`;
       
       container.appendChild(itemBox);
     });
@@ -1199,6 +1266,23 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       });
     }, { once: true });
   }
+
+  // --- ΝΕΟ: Επιστροφή από το τελικό preview στη λίστα upload ---
+  $('backToUploadBtn').onclick = function() {
+    var container = $('localPreviewContainer');
+    container.querySelectorAll('video, audio').forEach(media => {
+      media.pause();
+      media.removeAttribute('src');
+      media.load();
+    });
+    container.innerHTML = '';
+    previewURLs.forEach(function(u){ URL.revokeObjectURL(u); });
+    previewURLs = [];
+    
+    // Αλλάζουμε απλά το ποιο μενού φαίνεται, χωρίς να χάσουμε τα αρχεία
+    $('previewSheet').classList.remove('on');
+    $('uploadSheet').classList.add('on');
+  };
 
   $('closePreviewBtn').onclick = function() {
     var container = $('localPreviewContainer');
