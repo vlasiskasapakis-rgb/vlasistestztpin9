@@ -129,6 +129,7 @@
   
   /* Timeline Σχεδίαση */
   #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
+  #audioTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
   .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
   .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
   .timeline-block.mute { background: rgba(217, 83, 79, 0.85); }
@@ -155,7 +156,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2aΔιαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>2Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -581,6 +582,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
+  // Εδώ σχεδιάζονται ΟΛΑ τα διαστήματα στο timeline του βίντεο
   function updateVideoTimeline() {
     var timeline = $('videoTimeline');
     if (!timeline) return;
@@ -607,6 +609,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     });
   }
 
+  // Εδώ σχεδιάζονται ΟΛΑ τα διαστήματα στο timeline του ήχου
   function updateAudioTimeline() {
     var timeline = $('audioTimeline');
     if (!timeline) return;
@@ -902,12 +905,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     isDrawing = false;
   }
 
-  // Αφαιρούμε τα onpointer...
-  canvas.onpointerdown = null;
-  canvas.onpointermove = null;
-  canvas.onpointerup = null;
-  canvas.onpointercancel = null;
-
   // Touch Events για iOS & Android (με passive: false για να δουλέψει το preventDefault)
   canvas.addEventListener('touchstart', handleDrawStart, { passive: false });
   canvas.addEventListener('touchmove', handleDrawMove, { passive: false });
@@ -1157,6 +1154,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
 
         var t = video.currentTime;
         var shouldMute = false;
+        // Υποστήριξη για ΟΛΑ τα διαστήματα σίγασης:
         for (var i = 0; i < muteRanges.length; i++) {
           if (t >= muteRanges[i].s && t < muteRanges[i].e) {
             shouldMute = true;
@@ -1230,10 +1228,29 @@ window.addEventListener('deviceorientationabsolute', function(e) {
             if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
           });
 
+          // Έξυπνη συγχώνευση (merge) διαστημάτων για να μην κρασάρει το Web Audio API αν τα βάλεις το ένα πάνω στο άλλο!
+          var mergedRanges = [];
+          mRanges.sort(function(a,b){return a.s - b.s;}).forEach(function(r) {
+            if (mergedRanges.length === 0) mergedRanges.push(r);
+            else {
+              var last = mergedRanges[mergedRanges.length - 1];
+              if (r.s <= last.e) { last.e = Math.max(last.e, r.e); } 
+              else { mergedRanges.push(r); }
+            }
+          });
+
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
           var src = oCtx.createBufferSource(); src.buffer = aBuf;
           var gain = oCtx.createGain(); gain.gain.setValueAtTime(1, 0);
-          mRanges.forEach(function(r){ gain.gain.setValueAtTime(1, Math.max(0, r.s-0.01)); gain.gain.setValueAtTime(0, r.s); gain.gain.setValueAtTime(0, r.e); gain.gain.setValueAtTime(1, r.e+0.01); });
+          
+          // Εφαρμογή ΟΛΩΝ των διαστημάτων που επέλεξες
+          mergedRanges.forEach(function(r){ 
+            gain.gain.setValueAtTime(1, Math.max(0, r.s-0.01)); 
+            gain.gain.setValueAtTime(0, r.s); 
+            gain.gain.setValueAtTime(0, r.e); 
+            gain.gain.setValueAtTime(1, r.e+0.01); 
+          });
+          
           src.connect(gain); gain.connect(oCtx.destination); src.start(0);
 
           var renBuf = await oCtx.startRendering();
