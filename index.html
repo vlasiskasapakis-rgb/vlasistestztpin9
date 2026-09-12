@@ -809,30 +809,24 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       $('imageEditor').style.display = 'block';
       imageHistory = [];
       imgObj = new Image();
-     imgObj.onload = () => {
-      var k = Math.min(1, MAX_IMAGE_W / imgObj.width);
-      canvas.width = Math.round(imgObj.width * k);
-      canvas.height = Math.round(imgObj.height * k);
-      // Ζωγραφίζουμε την καθαρή εικόνα στο κεντρικό canvas
-      ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
+      imgObj.onload = () => {
+        var k = Math.min(1, MAX_IMAGE_W / imgObj.width);
+        canvas.width = Math.round(imgObj.width * k);
+        canvas.height = Math.round(imgObj.height * k);
+        ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
 
-      // Ετοιμάζουμε το canvas που θα κρατάει την θολωμένη βερσιόν
-      blurSrc.width = canvas.width; 
-      blurSrc.height = canvas.height;
-      var bctx = blurSrc.getContext('2d');
-      
-      try {
-        // Ενεργοποιούμε το φίλτρο
-        bctx.filter = 'blur(16px)';
-        // Ζωγραφίζουμε διαβάζοντας από το "canvas" (όχι από τον εαυτό του!)
+        blurSrc.width = canvas.width; 
+        blurSrc.height = canvas.height;
+        var bctx = blurSrc.getContext('2d');
         bctx.drawImage(canvas, 0, 0);
-        // Κλείνουμε το φίλτρο
-        bctx.filter = 'none';
-      } catch(err) {
-        // Fallback για πάρα πολύ παλιές συσκευές
-        bctx.drawImage(canvas, 0, 0);
-      }
-    };
+        try {
+          bctx.filter = 'blur(16px)';
+          bctx.drawImage(blurSrc, 0, 0);
+          bctx.filter = 'none';
+        } catch(err) {
+          bctx.drawImage(canvas, 0, 0, blurSrc.width, blurSrc.height);
+        }
+      };
       imgObj.src = currentObjectURL;
     }
     else if(file.type.startsWith('video/')) {
