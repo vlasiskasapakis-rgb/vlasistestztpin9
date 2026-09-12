@@ -131,8 +131,6 @@
   #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
   .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
   .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
-  
-  /* Εδώ προσθέτουμε διαφάνεια στο .mute ώστε να φαίνεται η κυματομορφή από κάτω */
   .timeline-block.mute { background: rgba(217, 83, 79, 0.55); }
 
   .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
@@ -259,20 +257,27 @@
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
-    <!-- Editor Ήχου ΜΕ ΚΥΜΑΤΟΜΟΡΦΗ (Waveform) -->
+    <!-- Editor Ήχου ΜΕ ΕΝΣΩΜΑΤΩΜΕΝΟ PLAYER ΣΤΗΝ ΚΥΜΑΤΟΜΟΡΦΗ -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
-      <audio id="audioPreview" controls style="width:100%; margin-bottom:6px;"></audio>
+      <!-- Το native player κρύφτηκε -->
+      <audio id="audioPreview" style="display:none;"></audio>
       
-      <!-- Νέο Container Κυματομορφής & Timeline Σημείων -->
-      <div style="position:relative; width:100%; height:80px; background:#0A1F22; border-radius:4px; margin-bottom:10px; overflow:hidden;">
-        <!-- Το Canvas της κυματομορφής -->
+      <!-- Waveform & Player Container -->
+      <div id="waveContainer" style="position:relative; width:100%; height:90px; background:#0A1F22; border-radius:6px; margin-bottom:10px; overflow:hidden; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+        <!-- Κυματομορφή -->
         <canvas id="audioWaveCanvas" style="position:absolute; inset:0; width:100%; height:100%; display:block;"></canvas>
         
-        <!-- Το Timeline που ζωγραφίζει τα κόκκινα κουτιά (σίγαση) πάνω στην κυματομορφή -->
+        <!-- Περιοχές Κοπής / Timeline -->
         <div id="audioTimeline" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
         
-        <!-- Η κάθετη γραμμή αναπαραγωγής (Playhead) -->
-        <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; display:none; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8);"></div>
+        <!-- Γραμμή Προόδου (Σκιώδες Φίλτρο Που Γεμίζει) -->
+        <div id="audioProgressFill" style="position:absolute; top:0; left:0; width:0%; height:100%; background:rgba(255,255,255,0.15); pointer-events:none;"></div>
+        
+        <!-- Playhead (Λευκή Κάθετη Γραμμή) -->
+        <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8); display:none;"></div>
+
+        <!-- Κουμπί Play/Pause (Custom) -->
+        <button id="wavePlayBtn" style="position:absolute; left:12px; bottom:12px; background:var(--chalk); color:var(--ink); border:none; border-radius:50%; width:38px; height:38px; font-size:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5); z-index:5;">▶</button>
       </div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
@@ -648,7 +653,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     
     // Ασφάλεια αν το UI δεν έχει προλάβει να ανανεώσει τις διαστάσεις
     var width = rect.width || waveCanvas.parentElement.clientWidth || 300;
-    var height = rect.height || 80;
+    var height = rect.height || 90;
 
     waveCanvas.width = width * dpr;
     waveCanvas.height = height * dpr;
@@ -684,13 +689,44 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     }
   }
 
-  // Playhead Audio Logic
+  // === NΕΑ ΛΕΙΤΟΥΡΓΙΚΟΤΗΤΑ ΕΝΣΩΜΑΤΩΜΕΝΟΥ PLAYER (WAVEFORM PLAYBACK) ===
+  
+  $('wavePlayBtn').onclick = function(e) {
+    e.stopPropagation(); // Να μην πιάσει το click το waveContainer
+    var aud = $('audioPreview');
+    if (aud.paused) aud.play();
+    else aud.pause();
+  };
+
+  $('waveContainer').onclick = function(e) {
+    if (e.target.id === 'wavePlayBtn') return;
+    var aud = $('audioPreview');
+    if (!aud.duration) return;
+    
+    var rect = this.getBoundingClientRect();
+    var clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+    var pct = (clientX - rect.left) / rect.width;
+    
+    // Κάνουμε seeking βάσει του που έκανε κλικ ο χρήστης
+    aud.currentTime = pct * aud.duration;
+  };
+
+  $('audioPreview').addEventListener('play', function() {
+    $('wavePlayBtn').textContent = '⏸';
+  });
+
+  $('audioPreview').addEventListener('pause', function() {
+    $('wavePlayBtn').textContent = '▶';
+  });
+
   $('audioPreview').addEventListener('timeupdate', function () {
     var playhead = $('audioPlayhead');
+    var progress = $('audioProgressFill');
     if (this.duration) {
       playhead.style.display = 'block';
       var pct = (this.currentTime / this.duration) * 100;
       playhead.style.left = pct + '%';
+      progress.style.width = pct + '%';
     }
   });
 
@@ -910,6 +946,8 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     else {
       // Άνοιγμα Ηχητικού Editor
       $('audioEditor').style.display = 'block';
+      $('wavePlayBtn').textContent = '▶'; // Μηδενισμός του κουμπιού
+      
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
       aud.load();
