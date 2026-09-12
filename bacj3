@@ -34,7 +34,7 @@
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
 
-  /* Σταθερά HTML AR Markers (Overlay) - Μικρότερα & Κομψά */
+  /* Σταθερά HTML AR Markers (Overlay) */
   #ar-overlay-container { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
   .ar-html-marker {
     position: absolute;
@@ -299,6 +299,9 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
+  // Ανίχνευση iOS για τη διόρθωση της απόκλισης 90 μοιρών
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
   // ==========================================
   // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
   // ==========================================
@@ -333,6 +336,11 @@
       cam.getWorldDirection(_cameraDir);
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
+
+      // Αν είναι iOS, διορθώνουμε την απόκλιση των 90 μοιρών
+      if (isIOS) {
+        h = (h + 90) % 360;
+      }
 
       window.currentHeading = h;
       if (this.displayHeading === undefined) this.displayHeading = h;
@@ -419,7 +427,7 @@
     calculatedItems.sort((a, b) => a.x - b.x);
 
     var basePosY = window.innerHeight / 2;
-    var minSpacing = 130; // Απόσταση ασφαλείας σε pixels
+    var minSpacing = 130;
 
     for (var i = 0; i < calculatedItems.length; i++) {
       var item = calculatedItems[i];
@@ -1153,7 +1161,7 @@
           var mRanges = [];
           document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
             var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
+            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.path({s:s, e:end});
           });
 
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
