@@ -29,11 +29,31 @@
     font-size: 17px; line-height: 1.5;
   }
   button { font: inherit; cursor: pointer; border: 0; border-radius: 2px; }
-  img.labelsrc { display: none; }
 
   /* AR Scene - Πίσω από όλα */
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
+
+  /* Σταθερά HTML AR Markers (Overlay) - Μικρότερα & Κομψά */
+  #ar-overlay-container { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+  .ar-html-marker {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: rgba(14, 42, 46, 0.94);
+    border-left: 4px solid var(--chalk);
+    color: var(--bone);
+    padding: 8px 12px;
+    border-radius: 6px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.5);
+    pointer-events: auto;
+    cursor: pointer;
+    width: 180px;
+    text-align: left;
+    transition: left 0.15s ease-out, top 0.15s ease-out;
+  }
+  .ar-html-marker .m-title { display: block; font-size: 14px; font-weight: 700; color: var(--bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ar-html-marker .m-sub { display: block; font-size: 11px; color: var(--sea); margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ar-html-marker .m-dist { display: block; font-size: 12px; font-weight: 600; color: var(--chalk); }
 
   /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
@@ -146,6 +166,9 @@
   <div id="status">Αναμονή για στίγμα…</div>
   <button id="nearest"><span class="dist"></span><span class="name"></span></button>
 </div>
+
+<!-- HTML AR Overlays Container -->
+<div id="ar-overlay-container"></div>
 
 <!-- Κουμπί Νέας Ιστορίας -->
 <button id="addBtn" aria-label="Προσθήκη">+</button>
@@ -284,8 +307,7 @@
     { id: 'sapfous', title: 'Πλατεία Σαπφούς', subtitle: 'Παραλιακή', lat: 39.106641, lon: 26.557426, radius: 40, text: 'Η κεντρική πλατεία της Μυτιλήνης.' }
   ];
 
-  var MIN_DIST = 2, Y_OFF = 1.2;
-  var AR_CLUSTERS = [], CLUSTER_RADIUS_M = 50, CLUSTER_REVEAL_M = 80;
+  var MIN_DIST = 2;
   var me = null, map = null, meMarker = null, accCircle = null, followMe = true;
   window.currentHeading = null;
 
@@ -302,17 +324,6 @@
     var a = Math.sin(rad(lat2 - lat1)/2) * Math.sin(rad(lat2 - lat1)/2) + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1)/2) * Math.sin(rad(lon2 - lon1)/2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
-
-  var _camPos = new THREE.Vector3();
-  AFRAME.registerComponent('billboard', {
-    tick: function () {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      cam.getWorldPosition(_camPos);
-      var o = this.el.object3D;
-      o.lookAt(_camPos.x, o.position.y, _camPos.z);
-    }
-  });
 
   var _cameraDir = new THREE.Vector3();
   AFRAME.registerComponent('hud-compass', {
@@ -336,66 +347,34 @@
         degOut.textContent = Math.round(h) + '°';
       }
       applyHeadingToDot();
+      updateHTMLMarkersPosition();
     }
   });
-
-  // Ειδικό component για να διορθώσουμε τη φορά των 3D entities στο iOS
-  AFRAME.registerComponent('ios-ar-fix', {
-    tick: function() {
-      var cam = this.el.sceneEl && this.el.sceneEl.camera;
-      if (!cam) return;
-      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) {
-        this.el.object3D.rotation.y = THREE.MathUtils.degToRad(180);
-      }
-    }
-  });
-
-  function makeLabelImage(title, subtitle, isCluster) {
-    var c = document.createElement('canvas'); c.width = 1800; c.height = 600; var g = c.getContext('2d'); g.scale(2,2);
-    g.fillStyle = isCluster ? 'rgba(14,42,46,0.95)' : 'rgba(14,42,46,0.90)'; g.fillRect(0,0,900,300);
-    g.fillStyle = isCluster ? '#4E8C93' : '#F0C244'; g.fillRect(0,0,16,300);
-    g.fillStyle = '#F2EDE4'; g.font = '600 82px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 120);
-    g.fillStyle = '#8FC0C4'; g.font = '46px sans-serif'; g.fillText(subtitle, 50, 200);
-    var img = document.createElement('img'); img.id = 'img-' + Math.random().toString(36).substr(2,9);
-    img.src = c.toDataURL(); img.className = 'labelsrc'; document.body.appendChild(img);
-    return img.id;
-  }
-
-  function prepareARClusters() {
-    var assigned = {};
-    STORIES.forEach((s, i) => {
-      if(assigned[i]) return;
-      var c = { id: 'c-'+i, stories: [s], lat: s.lat, lon: s.lon }; assigned[i] = true;
-      STORIES.forEach((s2, j) => {
-        if(i!==j && !assigned[j] && distanceMetres(s.lat, s.lon, s2.lat, s2.lon) < CLUSTER_RADIUS_M) {
-          c.stories.push(s2); assigned[j] = true;
-        }
-      });
-      if(c.stories.length > 1) {
-        c.lat = c.stories.reduce((sum,st)=>sum+st.lat,0)/c.stories.length;
-        c.lon = c.stories.reduce((sum,st)=>sum+st.lon,0)/c.stories.length;
-        AR_CLUSTERS.push(c);
-      }
-    });
-  }
 
   function buildScene() {
-    prepareARClusters();
-    var parts = [];
-
-    AR_CLUSTERS.forEach(c => {
-      var imgId = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', true);
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
-    });
+    var container = $('ar-overlay-container');
+    container.innerHTML = '';
 
     STORIES.forEach(s => {
-      var imgId = makeLabelImage(s.title, s.subtitle, false);
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="5 5 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      var div = document.createElement('div');
+      div.className = 'ar-html-marker';
+      div.id = 'html-marker-' + s.id;
+      div.style.display = 'none';
+      div.innerHTML = `
+        <span class="m-title">${s.title}</span>
+        <span class="m-sub">${s.subtitle}</span>
+        <span class="m-dist" id="dist-${s.id}">Υπολογισμός...</span>
+      `;
+      div.onclick = () => {
+        $('sheetTitle').textContent = s.title;
+        $('sheetSub').textContent = s.subtitle;
+        $('sheetBody').textContent = s.text;
+        $('infoSheet').classList.add('on');
+      };
+      container.appendChild(div);
     });
 
-    parts.push(`<a-camera id="cam" ios-ar-fix gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
-
+    var parts = [`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`];
     var scene = document.createElement('a-scene');
     scene.setAttribute('hud-compass', ''); 
     scene.setAttribute('vr-mode-ui', 'enabled: false');
@@ -404,21 +383,59 @@
     document.body.appendChild(scene);
   }
 
-  function updateARLabels() {
-    if(!me) return;
-    AR_CLUSTERS.forEach(c => {
-      var el = document.getElementById(c.id); if(!el) return;
-      var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
-      if(d < CLUSTER_REVEAL_M) el.setAttribute('visible', 'false');
-      else { el.setAttribute('visible', 'true'); var k = Math.max(d, 25)*0.09; el.setAttribute('scale', k+' '+k+' 1'); }
-    });
+  function updateHTMLMarkersPosition() {
+    if (!me || window.currentHeading === null) return;
+    var cam = document.querySelector('#cam');
+    if (!cam) return;
+
+    var calculatedItems = [];
+
     STORIES.forEach(s => {
-      var el = document.querySelector(`.poi[data-id="${s.id}"]`); if(!el) return;
-      var parent = AR_CLUSTERS.find(c => c.stories.includes(s));
-      if(parent && distanceMetres(me.lat, me.lon, parent.lat, parent.lon) >= CLUSTER_REVEAL_M) { el.setAttribute('visible', 'false'); return; }
-      el.setAttribute('visible', 'true');
-      var k = Math.max(distanceMetres(me.lat, me.lon, s.lat, s.lon), 25)*0.09; el.setAttribute('scale', k+' '+k+' 1');
+      var markerEl = $('html-marker-' + s.id);
+      if (!markerEl) return;
+
+      var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
+      var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
+      $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
+
+      var rad = function(d) { return d * Math.PI / 180; };
+      var dLon = rad(s.lon - me.lon);
+      var y = Math.sin(dLon) * Math.cos(rad(s.lat));
+      var x = Math.cos(rad(me.lat)) * Math.sin(rad(s.lat)) - Math.sin(rad(me.lat)) * Math.cos(rad(s.lat)) * Math.cos(dLon);
+      var bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+      var angleDiff = bearing - window.currentHeading;
+      while (angleDiff < -180) angleDiff += 360;
+      while (angleDiff > 180) angleDiff -= 360;
+
+      if (Math.abs(angleDiff) < 70) {
+        var screenX = window.innerWidth / 2 + (angleDiff / 70) * (window.innerWidth / 2);
+        calculatedItems.push({ el: markerEl, x: screenX, diff: angleDiff });
+      } else {
+        markerEl.style.display = 'none';
+      }
     });
+
+    calculatedItems.sort((a, b) => a.x - b.x);
+
+    var basePosY = window.innerHeight / 2;
+    var minSpacing = 130; // Απόσταση ασφαλείας σε pixels
+
+    for (var i = 0; i < calculatedItems.length; i++) {
+      var item = calculatedItems[i];
+      item.el.style.display = 'block';
+      
+      var targetX = item.x;
+      var targetY = basePosY;
+
+      if (i > 0 && Math.abs(calculatedItems[i].x - calculatedItems[i - 1].x) < minSpacing) {
+        var offset = (i % 2 === 0) ? -55 : 55;
+        targetY = basePosY + offset;
+      }
+
+      item.el.style.left = targetX + 'px';
+      item.el.style.top = targetY + 'px';
+    }
   }
 
   function initMap() {
@@ -468,7 +485,7 @@
 
   function onPosition(pos) {
     me = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy };
-    updateARLabels(); updateMap();
+    updateMap();
     $('status').textContent = `Ακρίβεια ${Math.round(me.accuracy)}m. ` + (window.currentHeading===null ? '' : `Πυξίδα ${Math.round(window.currentHeading)}°`);
 
     $('addBtn').classList.add('on');
@@ -496,7 +513,7 @@
   });
 
   // ==========================================
-  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ (Με iOS-safe Blur)
+  // 2. ΤΟΠΙΚΟΣ ΕΠΕΞΕΡΓΑΣΤΗΣ & ΗΧΟΓΡΑΦΗΣΗ
   // ==========================================
   var MAX_IMAGE_W = 1600;  
   var MAX_VIDEO_W = 640;     
@@ -519,7 +536,6 @@
     if (pct != null) $('procBarFill').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  // --- Ενημέρωση Timeline Βίντεο ---
   function updateVideoTimeline() {
     var timeline = $('videoTimeline');
     if (!timeline) return;
@@ -546,7 +562,6 @@
     });
   }
 
-  // --- Ενημέρωση Timeline Ήχου ---
   function updateAudioTimeline() {
     var timeline = $('audioTimeline');
     if (!timeline) return;
@@ -572,7 +587,6 @@
     });
   }
 
-  // --- Διαχείριση Σημείων Ήχου (Stamps) ---
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
     div.innerHTML = `Από: <input type="number" step="0.1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
@@ -594,7 +608,6 @@
   $('audioMuteList').addEventListener('input', function() { updateAudioTimeline(); });
   $('audioMuteList').addEventListener('change', function() { updateAudioTimeline(); });
 
-  // --- Διαστήματα Βίντεο (Stamps) ---
   function addVideoRangeRow(start, end, mute, blur) {
     var div = document.createElement('div'); div.className = 'range-item';
     div.innerHTML =
@@ -657,33 +670,51 @@
   $('addBtn').onclick = () => { if(me) { $('uploadSheet').classList.add('on'); setAR(false); } };
   $('triggerFileBtn').onclick = () => $('singleFileInput').click();
 
-  // --- ΖΩΝΤΑΝΗ ΗΧΟΓΡΑΦΗΣΗ ΑΡΧΕΙΟΥ ---
   var mediaRecorder = null;
   var audioChunks = [];
   var recTimerInterval = null;
   var recSeconds = 0;
+  var recordingStream = null;
 
   $('recordAudioBtn').onclick = async function() {
     try {
-      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true } 
+      });
       audioChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
+
+      var mimeType = '';
+      var possibleTypes = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'];
+      for (var i = 0; i < possibleTypes.length; i++) {
+        if (MediaRecorder.isTypeSupported(possibleTypes[i])) {
+          mimeType = possibleTypes[i];
+          break;
+        }
+      }
+
+      var options = mimeType ? { mimeType: mimeType } : {};
+      mediaRecorder = new MediaRecorder(recordingStream, options);
 
       mediaRecorder.ondataavailable = function(e) {
         if (e.data && e.data.size > 0) audioChunks.push(e.data);
       };
 
       mediaRecorder.onstop = function() {
-        stream.getTracks().forEach(track => track.stop());
-        
-        var audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        var fileName = "ηχογράφηση_" + new Date().toISOString().slice(0,10) + ".wav";
-        var recordedFile = new File([audioBlob], fileName, { type: 'audio/wav' });
+        if (recordingStream) {
+          recordingStream.getTracks().forEach(track => track.stop());
+          recordingStream = null;
+        }
+        var finalMime = mediaRecorder.mimeType || 'audio/mp4';
+        var audioBlob = new Blob(audioChunks, { type: finalMime });
+        var ext = finalMime.includes('webm') ? 'webm' : 'm4a';
+        var fileName = "ηχογράφηση_" + new Date().toISOString().slice(0,10) + "." + ext;
+        var recordedFile = new File([audioBlob], fileName, { type: finalMime });
 
         $('recorderModal').classList.remove('on');
         loadFileIntoEditor(recordedFile, null);
       };
 
+      mediaRecorder.start(250);
       $('recorderModal').classList.add('on');
       recSeconds = 0;
       $('recStatusTimer').textContent = "00:00";
@@ -694,8 +725,6 @@
         var s = String(recSeconds % 60).padStart(2, '0');
         $('recStatusTimer').textContent = m + ":" + s;
       }, 1000);
-
-      mediaRecorder.start();
     } catch (err) {
       alert("Δεν ήταν δυνατή η πρόσβαση στο μικρόφωνο: " + (err.message || err));
     }
@@ -703,21 +732,16 @@
 
   $('stopRecBtn').onclick = function() {
     clearInterval(recTimerInterval);
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
-    }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   };
 
   $('cancelRecBtn').onclick = function() {
     clearInterval(recTimerInterval);
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
-      mediaRecorder.stop();
-    }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    if (recordingStream) { recordingStream.getTracks().forEach(track => track.stop()); recordingStream = null; }
     $('recorderModal').classList.remove('on');
   };
 
-  // Φόρτωση αρχείου στον editor
   function loadFileIntoEditor(file, savedMeta) {
     currentFile = file;
     setAR(false);
@@ -749,7 +773,6 @@
         blurSrc.width = canvas.width; 
         blurSrc.height = canvas.height;
         var bctx = blurSrc.getContext('2d');
-        
         bctx.drawImage(canvas, 0, 0);
         try {
           bctx.filter = 'blur(16px)';
@@ -777,7 +800,7 @@
         updateVideoTimeline();
       };
     }
-    else if(file.type.startsWith('audio/')) {
+    else {
       $('audioEditor').style.display = 'block';
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
@@ -842,7 +865,7 @@
       var savedMeta = { ranges: [] };
       if (currentFile.type.startsWith('video/')) {
         savedMeta.ranges = readVideoRanges();
-      } else if (currentFile.type.startsWith('audio/')) {
+      } else if (currentFile.type.startsWith('audio/') || currentFile.name.endsWith('.m4a') || currentFile.name.endsWith('.wav')) {
         document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
           var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
           if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
@@ -857,9 +880,9 @@
         var vblob = await processVideoLocal(currentFile);
         processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
       }
-      else if (currentFile.type.startsWith('audio/')) {
+      else {
         var ablob = await processAudioLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: 'audio/wav', blob: ablob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, type: ablob.type || 'audio/mp4', blob: ablob, meta: savedMeta });
       }
       updateMediaListUI();
     } catch (e) {
@@ -922,7 +945,7 @@
         itemBox.innerHTML += `<img src="${blobUrl}" style="width:100%; max-height:150px; object-fit:contain; border-radius:4px; margin-bottom:5px;">`;
       } else if (f.type.startsWith('video/')) {
         itemBox.innerHTML += `<video src="${blobUrl}" controls playsinline preload="metadata" style="width:100%; max-height:200px; border-radius:4px; margin-bottom:5px;"></video>`;
-      } else if (f.type.startsWith('audio/')) {
+      } else {
         itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
       }
       
@@ -962,25 +985,14 @@
     setAR(true);
   };
 
-  // --- Επεξεργαστής Βίντεο ---
   function processVideoLocal(file) {
     return new Promise(function (resolve, reject) {
       setAR(false);
-
       var video = $('videoPreview');
       var ranges = readVideoRanges();
 
-      if (ranges.length === 0) { 
-        setAR(true); 
-        resolve(file); 
-        return; 
-      }
-
-      if (!window.MediaRecorder) { 
-        setAR(true);
-        resolve(file); 
-        return; 
-      }
+      if (ranges.length === 0) { setAR(true); resolve(file); return; }
+      if (!window.MediaRecorder) { setAR(true); resolve(file); return; }
       
       var mime = [
         'video/webm;codecs=vp9,opus',
@@ -990,11 +1002,7 @@
         'video/webm'
       ].filter(function (t) { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } })[0];
       
-      if (!mime) { 
-        setAR(true);
-        reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); 
-        return; 
-      }
+      if (!mime) { setAR(true); reject(new Error('Ο browser δεν υποστηρίζει εγγραφή βίντεο.')); return; }
 
       var blurRanges = ranges.filter(function (r) { return r.blur; });
       var muteRanges = ranges.filter(function (r) { return r.mute; });
@@ -1047,7 +1055,6 @@
         try { video.pause(); } catch (e) {}
         video.onended = null;
         try { audioCtx.close(); } catch(e){}
-        
         setAR(true);
         resolve(new Blob(chunks, { type: mime.split(';')[0] }));
       };
@@ -1133,7 +1140,6 @@
     });
   }
 
-  // --- Επεξεργαστής Ήχου ---
   function processAudioLocal(file) {
     return new Promise(function(resolve, reject) {
       var reader = new FileReader();
