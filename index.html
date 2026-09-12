@@ -412,7 +412,7 @@
     document.body.appendChild(scene);
   }
 
-  function updateHTMLMarkersPosition() {
+ function updateHTMLMarkersPosition() {
     if (!me || window.currentHeading === null) return;
     var cam = document.querySelector('#cam');
     if (!cam) return;
@@ -427,6 +427,12 @@
       var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
       $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
 
+      // 2. ΦΙΛΤΡΟ: Εμφάνιση ΜΟΝΟ αν είναι κάτω από ή ίσο με 100 μέτρα.
+      if (d > 100) {
+        markerEl.style.display = 'none';
+        return; // Αγνοούμε εντελώς το σημείο, πάμε στο επόμενο
+      }
+
       var rad = function(d) { return d * Math.PI / 180; };
       var dLon = rad(s.lon - me.lon);
       var y = Math.sin(dLon) * Math.cos(rad(s.lat));
@@ -439,12 +445,14 @@
 
       if (Math.abs(angleDiff) < 70) {
         var screenX = window.innerWidth / 2 + (angleDiff / 70) * (window.innerWidth / 2);
-        calculatedItems.push({ el: markerEl, x: screenX, diff: angleDiff });
+        // Προσθήκη της απόστασης (d) στο αντικείμενο για μετέπειτα υπολογισμούς βάθους
+        calculatedItems.push({ el: markerEl, x: screenX, diff: angleDiff, dist: d });
       } else {
         markerEl.style.display = 'none';
       }
     });
 
+    // Ταξινόμηση αριστερά προς δεξιά για αποφυγή επικαλύψεων (X axis collision)
     calculatedItems.sort((a, b) => a.x - b.x);
 
     var basePosY = window.innerHeight / 2;
@@ -457,13 +465,30 @@
       var targetX = item.x;
       var targetY = basePosY;
 
+      // Αποφυγή επικάλυψης αν 2 σημεία είναι πολύ κοντά οριζόντια (στην οθόνη)
       if (i > 0 && Math.abs(calculatedItems[i].x - calculatedItems[i - 1].x) < minSpacing) {
         var offset = (i % 2 === 0) ? -55 : 55;
         targetY = basePosY + offset;
       }
 
+      // 1. ΟΠΤΙΚΟ ΒΑΘΟΣ: Ρύθμιση του μεγέθους, του ύψους και του z-index βάσει απόστασης
+
+      // SCALE: Όσο πιο κοντά στα 0m, τόσο μεγαλύτερο (μέχρι 1.25x). Στα 100m θα είναι μικρότερο (0.75x).
+      var scale = 1.25 - (item.dist / 100) * 0.5; 
+      scale = Math.max(0.75, Math.min(1.25, scale));
+
+      // Y-OFFSET: Τα κοντινά σημεία εμφανίζονται ελαφρώς πιο χαμηλά στην οθόνη (δίνει πολύ ωραία αίσθηση 3D)
+      var depthYOffset = (100 - item.dist) * 0.8;
+      targetY += depthYOffset;
+
+      // Z-INDEX: Σιγουρεύουμε ότι αν επικαλύπτονται, το κοντινό μπαίνει μπροστά από το μακρινό
+      var zIndex = Math.round(1000 - item.dist);
+
       item.el.style.left = targetX + 'px';
       item.el.style.top = targetY + 'px';
+      item.el.style.zIndex = zIndex;
+      // Διατηρούμε το κεντράρισμα και προσθέτουμε το scale
+      item.el.style.transform = `translate(-50%, -50%) scale(${scale})`;
     }
   }
 
