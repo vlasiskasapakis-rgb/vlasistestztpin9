@@ -868,11 +868,14 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     loadFileIntoEditor(f, null);
   };
 
-  function getMousePos(e) {
+ function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-    var cX = e.touches ? e.touches[0].clientX : e.clientX, cY = e.touches ? e.touches[0].clientY : e.clientY;
+    // Πιο ασφαλής έλεγχος για touches ώστε να μην "σκάσει" στο iOS
+    var cX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
+    var cY = (e.touches && e.touches.length > 0) ? e.touches[0].clientY : e.clientY;
     return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
   }
+
   function drawBlur(pos) {
     var r = Math.max(24, canvas.width * 0.05);
     ctx.save();
@@ -880,16 +883,42 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     ctx.drawImage(blurSrc, 0, 0);
     ctx.restore();
   }
-  canvas.onpointerdown = e => {
+
+  function handleDrawStart(e) {
+    e.preventDefault(); // Σταματάει το scroll του iOS
     isDrawing = true;
     imageHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     if (imageHistory.length > MAX_HISTORY) imageHistory.shift();
     drawBlur(getMousePos(e));
-    canvas.setPointerCapture(e.pointerId);
-  };
-  canvas.onpointermove = e => { if(isDrawing) drawBlur(getMousePos(e)); };
-  canvas.onpointerup = () => isDrawing = false;
-  canvas.onpointercancel = () => isDrawing = false;
+  }
+
+  function handleDrawMove(e) {
+    if (!isDrawing) return;
+    e.preventDefault(); // Σταματάει το swipe-to-go-back του iOS
+    drawBlur(getMousePos(e));
+  }
+
+  function handleDrawEnd(e) {
+    isDrawing = false;
+  }
+
+  // Αφαιρούμε τα onpointer...
+  canvas.onpointerdown = null;
+  canvas.onpointermove = null;
+  canvas.onpointerup = null;
+  canvas.onpointercancel = null;
+
+  // Touch Events για iOS & Android (με passive: false για να δουλέψει το preventDefault)
+  canvas.addEventListener('touchstart', handleDrawStart, { passive: false });
+  canvas.addEventListener('touchmove', handleDrawMove, { passive: false });
+  canvas.addEventListener('touchend', handleDrawEnd);
+  canvas.addEventListener('touchcancel', handleDrawEnd);
+
+  // Mouse Events για Desktop
+  canvas.addEventListener('mousedown', handleDrawStart);
+  canvas.addEventListener('mousemove', handleDrawMove);
+  canvas.addEventListener('mouseup', handleDrawEnd);
+  canvas.addEventListener('mouseleave', handleDrawEnd);
 
   $('undoBlurBtn').onclick = () => {
     if (imageHistory.length > 0) ctx.putImageData(imageHistory.pop(), 0, 0);
