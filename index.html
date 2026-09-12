@@ -304,13 +304,17 @@
   }
 
   var _camPos = new THREE.Vector3();
+  // Βελτιωμένο Billboard component για σταθερή, ευθεία προβολή προς την κάμερα
   AFRAME.registerComponent('billboard', {
     tick: function () {
       var cam = this.el.sceneEl && this.el.sceneEl.camera;
       if (!cam) return;
       cam.getWorldPosition(_camPos);
       var o = this.el.object3D;
-      o.lookAt(_camPos.x, o.position.y, o.position.z);
+      o.lookAt(_camPos.x, o.position.y, _camPos.z);
+      // Αποτροπή κλίσης στον άξονα Z ώστε να μην φαίνονται ποτέ στραβά
+      o.rotation.x = 0;
+      o.rotation.z = 0;
     }
   });
 
@@ -339,16 +343,19 @@
     }
   });
 
-  // Δυναμική δημιουργία ετικετών με ενσωματωμένη απόσταση
+  // Μεγαλύτερος καμβάς υψηλής ανάλυσης για ευανάγνωστα γράμματα
   function makeLabelImage(title, subtitle, distText, isCluster) {
-    var c = document.createElement('canvas'); c.width = 1800; c.height = 600; var g = c.getContext('2d'); g.scale(2,2);
-    g.fillStyle = isCluster ? 'rgba(14,42,46,0.95)' : 'rgba(14,42,46,0.90)'; g.fillRect(0,0,900,300);
-    g.fillStyle = isCluster ? '#4E8C93' : '#F0C244'; g.fillRect(0,0,16,300);
-    g.fillStyle = '#F2EDE4'; g.font = '600 74px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 100);
-    g.fillStyle = '#8FC0C4'; g.font = '42px sans-serif'; g.fillText(subtitle, 50, 175);
+    var c = document.createElement('canvas'); c.width = 2400; c.height = 800; var g = c.getContext('2d'); g.scale(2,2);
+    g.fillStyle = isCluster ? 'rgba(14,42,46,0.96)' : 'rgba(14,42,46,0.92)'; 
+    g.fillRect(0,0,1200,400);
+    g.fillStyle = isCluster ? '#4E8C93' : '#F0C244'; 
+    g.fillRect(0,0,24,400);
+    
+    g.fillStyle = '#F2EDE4'; g.font = 'bold 84px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 70, 110);
+    g.fillStyle = '#8FC0C4'; g.font = '50px sans-serif'; g.fillText(subtitle, 70, 205);
     
     if (distText) {
-      g.fillStyle = '#F0C244'; g.font = 'bold 44px sans-serif'; g.fillText(distText, 50, 240);
+      g.fillStyle = '#F0C244'; g.font = 'bold 60px sans-serif'; g.fillText(distText, 70, 310);
     }
 
     var img = document.createElement('img'); img.className = 'labelsrc';
@@ -374,7 +381,6 @@
     });
   }
 
-  // Αποθήκευση αναφορών για να ενημερώνουμε το κείμενο απόστασης ζωντανά
   var labelDataRegistry = [];
 
   function buildScene() {
@@ -388,7 +394,8 @@
       lObj.img.src = lObj.canvas.toDataURL();
       labelDataRegistry.push({ type: 'cluster', id: c.id, lat: c.lat, lon: c.lon, canvas: lObj.canvas, img: lObj.img, titleBase: c.stories.length + ' Σημεία κοντά', subBase: 'Πλησίασε' });
 
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="3.5 3.5 1"><a-plane width="3.5" height="1.2" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      // Μεγάλη σταθερή κλίμακα (scale) και πλάτος/ύψος για να φαίνονται πεντακάθαρα και μεγάλα
+      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="6 6 1"><a-plane width="5.5" height="1.8" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
     STORIES.forEach(s => {
@@ -397,7 +404,7 @@
       lObj.img.src = lObj.canvas.toDataURL();
       labelDataRegistry.push({ type: 'poi', id: s.id, lat: s.lat, lon: s.lon, canvas: lObj.canvas, img: lObj.img, titleBase: s.title, subBase: s.subtitle });
 
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="3.5 3.5 1"><a-plane width="3.5" height="1.2" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="6 6 1"><a-plane width="5.5" height="1.8" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
     parts.push(`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
@@ -413,7 +420,6 @@
   function updateARLabels() {
     if(!me) return;
     
-    // Ενημέρωση αποστάσεων και ορατότητας για clusters & POIs
     AR_CLUSTERS.forEach(c => {
       var el = document.getElementById(c.id); if(!el) return;
       var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
@@ -434,7 +440,6 @@
     });
   }
 
-  // Ανανέωση του καμβά της εικόνας ώστε να δείχνει την τρέχουσα απόσταση
   function updateLabelDistanceText(id, title, subtitle, distMeters) {
     var reg = labelDataRegistry.find(r => r.id === id);
     if (!reg) return;
@@ -442,16 +447,16 @@
     var distStr = 'Απόσταση: ' + (distMeters >= 1000 ? (distMeters/1000).toFixed(1) + ' km' : Math.round(distMeters) + ' m');
     
     var g = reg.canvas.getContext('2d');
-    g.clearRect(0, 0, 900, 300);
-    g.fillStyle = reg.type === 'cluster' ? 'rgba(14,42,46,0.95)' : 'rgba(14,42,46,0.90)'; 
-    g.fillRect(0,0,900,300);
+    g.clearRect(0, 0, 1200, 400);
+    g.fillStyle = reg.type === 'cluster' ? 'rgba(14,42,46,0.96)' : 'rgba(14,42,46,0.92)'; 
+    g.fillRect(0,0,1200,400);
     g.fillStyle = reg.type === 'cluster' ? '#4E8C93' : '#F0C244'; 
-    g.fillRect(0,0,16,300);
+    g.fillRect(0,0,24,400);
     
-    g.fillStyle = '#F2EDE4'; g.font = '600 74px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 100);
-    g.fillStyle = '#8FC0C4'; g.font = '42px sans-serif'; g.fillText(subtitle, 50, 175);
+    g.fillStyle = '#F2EDE4'; g.font = 'bold 84px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 70, 110);
+    g.fillStyle = '#8FC0C4'; g.font = '50px sans-serif'; g.fillText(subtitle, 70, 205);
     
-    g.fillStyle = '#F0C244'; g.font = 'bold 44px sans-serif'; g.fillText(distStr, 50, 240);
+    g.fillStyle = '#F0C244'; g.font = 'bold 60px sans-serif'; g.fillText(distStr, 70, 310);
 
     reg.img.src = reg.canvas.toDataURL();
   }
