@@ -118,8 +118,8 @@
 
   #mediaList { margin-bottom: 15px; }
   .media-list-item { background: #e0e0e0; padding: 10px; margin-bottom: 6px; border-radius: 6px; font-size: 14px; color: var(--ink); display: flex; justify-content: space-between; align-items: center; }
-  .delete-media-btn { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; }
-  .edit-media-btn { background: var(--sea); color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 5px; }
+  .delete-media-btn { background: #d9534f; color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 14px; cursor: pointer; }
+  .edit-media-btn { background: var(--sea); color: white; border: none; padding: 6px 10px; border-radius: 4px; font-size: 14px; cursor: pointer; margin-right: 5px; }
 
   /* Editor Canvas & Box */
   .editor-box { position: relative; width: 100%; background: #000; border-radius: 6px; overflow: hidden; margin-bottom: 15px; display: none; touch-action: none; }
@@ -232,7 +232,7 @@
 <div id="editorSheet" class="edit-sheet">
   <div class="sheet-inner" style="position: relative;">
     <h2 id="editorTitle">Επεξεργασία Αρχείου</h2>
-    <p id="editorFilename" style="font-size:13px; color:var(--sea); margin-top:-10px; margin-bottom:15px;">αρχείο.jpg</p>
+    <p id="editorFilename" style="font-size:13px; color:var(--sea); margin-top:-10px; margin-bottom:15px; word-break: break-all;">αρχείο.jpg</p>
 
     <!-- Editor Εικόνας (Blur) -->
     <div id="imageEditor" class="editor-box">
@@ -243,13 +243,11 @@
 
     <!-- Editor Βίντεο ΜΕ CUSTOM PLAYER -->
     <div id="videoEditor" class="editor-box" style="background:transparent;">
-      <!-- Το βίντεο χωρίς controls -->
       <div id="videoContainer" style="position:relative;">
         <video id="videoPreview" playsinline preload="metadata" style="width:100%; display:block; border-radius:6px 6px 0 0; cursor:pointer; background:#000;"></video>
         <button id="vidPlayOverlayBtn" style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:60px; height:60px; font-size:28px; display:flex; align-items:center; justify-content:center; pointer-events:none; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">▶</button>
       </div>
 
-      <!-- Μπάρα Χρόνου Βίντεο -->
       <div id="videoTimelineContainer" style="position:relative; width:100%; height:60px; background:#0A1F22; border-radius:0 0 6px 6px; margin-bottom:6px; overflow:hidden; cursor:pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
         <canvas id="videoGridCanvas" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></canvas>
         <div id="videoTimeline" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
@@ -300,7 +298,7 @@
 <div id="previewSheet" class="edit-sheet">
   <div class="sheet-inner">
     <h2>Τα Αρχεία σου (Τοπική Προβολή)</h2>
-    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου:</p>
+    <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου πριν πατήσεις Ολοκλήρωση.</p>
 
     <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
 
@@ -597,7 +595,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var duration = video.duration;
     if (!duration || isNaN(duration) || duration <= 0) return;
 
-    // Ζωγραφίζουμε το Grid πάνω στο Canvas (δευτερόλεπτα)
     var gridCanvas = $('videoGridCanvas');
     var ctx = gridCanvas.getContext('2d');
     var dpr = window.devicePixelRatio || 1;
@@ -628,14 +625,12 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       else if (x > width - 15) ctx.textAlign = 'right';
       else ctx.textAlign = 'center';
       
-      ctx.fillText(t + 's', x, 4); // Κείμενο
-      
+      ctx.fillText(t + 's', x, 4); 
       ctx.fillStyle = 'rgba(242, 237, 228, 0.15)'; 
-      ctx.fillRect(x, topOffset, 1, height - topOffset); // Κάθετη γραμμή
+      ctx.fillRect(x, topOffset, 1, height - topOffset);
       ctx.fillStyle = 'rgba(242, 237, 228, 0.8)'; 
     }
 
-    // Τοποθέτηση των Blocks (Blur & Mute)
     document.querySelectorAll('#videoRangeList .range-item').forEach(function(row) {
       var s = parseFloat(row.querySelector('.r-start').value);
       var e = parseFloat(row.querySelector('.r-end').value);
@@ -647,7 +642,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
       var widthPct = Math.max(0, Math.min(100 - leftPct, ((e - s) / duration) * 100));
 
-      // Αν έχουν τσεκαριστεί και τα δύο, βάζουμε 2 div. Το CSS θα αναλάβει τη διαφάνεια ώστε να φαίνονται.
       if (blur) {
         var blockB = document.createElement('div');
         blockB.className = 'timeline-block blur';
@@ -694,7 +688,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     });
   }
 
-  // === Σχεδίαση Κυματομορφής (Waveform) με GRID δευτερολέπτων ===
   function drawWaveform(buffer) {
     var waveCanvas = $('audioWaveCanvas');
     var waveCtx = waveCanvas.getContext('2d');
@@ -1025,7 +1018,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     }
     else if(file.type.startsWith('video/')) {
       $('videoEditor').style.display = 'block';
-      $('vidPlayOverlayBtn').style.display = 'flex'; // Αρχική εμφάνιση
+      $('vidPlayOverlayBtn').style.display = 'flex';
       $('vTimeNow').textContent = 'Φόρτωση βίντεο...';
       
       var vid = $('videoPreview'); 
@@ -1146,26 +1139,37 @@ window.addEventListener('deviceorientationabsolute', function(e) {
 
     try {
       var savedMeta = { ranges: [] };
+      var baseType = 'audio';
+      
       if (currentFile.type.startsWith('video/')) {
+        baseType = 'video';
         savedMeta.ranges = readVideoRanges();
+      } else if (currentFile.type.startsWith('image/')) {
+        baseType = 'image';
       } else if (currentFile.type.startsWith('audio/') || currentFile.name.endsWith('.m4a') || currentFile.name.endsWith('.wav')) {
+        baseType = 'audio';
         document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
           var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
           if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
         });
       }
 
+      // 1. Δημιουργία Όμορφου Ονόματος
+      var typeGr = baseType === 'image' ? 'Εικόνα' : (baseType === 'video' ? 'Βίντεο' : 'Ήχος');
+      var count = processedFiles.filter(function(x){ return x.type.startsWith(baseType); }).length + 1;
+      var generatedDisplayName = typeGr + ' ' + count;
+
       if (currentFile.type.startsWith('image/')) {
         var blob = await new Promise(function(res){ canvas.toBlob(res, 'image/jpeg', 0.82); });
-        processedFiles.push({ name: currentFile.name, type: 'image/jpeg', blob: blob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, displayName: generatedDisplayName, type: 'image/jpeg', blob: blob, meta: savedMeta });
       }
       else if (currentFile.type.startsWith('video/')) {
         var vblob = await processVideoLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, displayName: generatedDisplayName, type: vblob.type || 'video/webm', blob: vblob, meta: savedMeta });
       }
       else {
         var ablob = await processAudioLocal(currentFile);
-        processedFiles.push({ name: currentFile.name, type: ablob.type || 'audio/mp4', blob: ablob, meta: savedMeta });
+        processedFiles.push({ name: currentFile.name, displayName: generatedDisplayName, type: ablob.type || 'audio/mp4', blob: ablob, meta: savedMeta });
       }
       updateMediaListUI();
     } catch (e) {
@@ -1183,6 +1187,16 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     updateMediaListUI();
   };
 
+  // 2. Νέα λειτουργία: Επεξεργασία από την αρχική λίστα!
+  window.editFromUploadList = function(index) {
+    var f = processedFiles[index];
+    if (!f) return;
+    processedFiles.splice(index, 1);
+    updateMediaListUI(); // Αφαίρεση από τη λίστα UI
+    var fileObj = new File([f.blob], f.name, { type: f.type });
+    loadFileIntoEditor(fileObj, f.meta);
+  };
+
   function updateMediaListUI() {
     var list = $('mediaList');
     if (processedFiles.length === 0) {
@@ -1192,11 +1206,20 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var html = '';
     processedFiles.forEach((f, i) => {
       var kb = f.blob ? Math.round(f.blob.size/1024) : 0;
-      html += `<div class="media-list-item"><span>${i+1}. ${f.name} <small style="color:#666">(${kb} KB)</small></span><div><button class="delete-media-btn" onclick="removeMedia(${i})">Διαγραφή</button></div></div>`;
+      html += `<div class="media-list-item">
+                 <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%;" title="${f.name}">
+                   ${i+1}. ${f.displayName} <small style="color:#666">(${kb} KB)</small>
+                 </span>
+                 <div style="flex-shrink:0;">
+                   <button class="edit-media-btn" onclick="editFromUploadList(${i})" title="Επεξεργασία αυτού του αρχείου">✏️</button>
+                   <button class="delete-media-btn" onclick="removeMedia(${i})" title="Διαγραφή">✕</button>
+                 </div>
+               </div>`;
     });
     list.innerHTML = html;
   }
 
+  // Αυτή η μέθοδος αφορά το τελικό preview (αφού πατήσεις "Ολοκλήρωση Ιστορίας")
   window.editSavedMedia = function(index) {
     var f = processedFiles[index];
     if (!f) return;
@@ -1204,12 +1227,13 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var fileObj = new File([f.blob], f.name, { type: f.type });
     loadFileIntoEditor(fileObj, f.meta);
     processedFiles.splice(index, 1);
+    updateMediaListUI(); // Σε περίπτωση που ο χρήστης ακυρώσει, θα επιστρέψει στο κεντρικό upload sheet
   };
 
   $('finishStoryBtn').onclick = function() {
     var title = $('storyTitle').value;
     if (!title) return alert("Βάλε έναν τίτλο για την ιστορία σου.");
-    if (processedFiles.length === 0) return alert("Πρόσθεσε τουλάχιστον ένα αρχείο.");
+    if (processedFiles.length === 0) return alert("Πρόσθε τουλάχιστον ένα αρχείο.");
 
     $('uploadSheet').classList.remove('on');
     var container = $('localPreviewContainer');
@@ -1220,7 +1244,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     processedFiles.forEach((f, i) => {
       var itemBox = document.createElement('div');
       itemBox.style.cssText = "background:#f0f0f0; padding:10px; border-radius:6px; color:#333;";
-      itemBox.innerHTML = `<p style="margin:0 0 5px; font-weight:bold;">${i+1}. ${f.name}</p>`;
+      itemBox.innerHTML = `<p style="margin:0 0 5px; font-weight:bold;">${i+1}. ${f.displayName}</p>`;
       var blobUrl = URL.createObjectURL(f.blob);
       previewURLs.push(blobUrl);
 
@@ -1232,7 +1256,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
         itemBox.innerHTML += `<audio src="${blobUrl}" controls preload="metadata" style="width:100%; margin-bottom:5px;"></audio>`;
       }
       
-      itemBox.innerHTML += `<button class="edit-media-btn" onclick="editSavedMedia(${i})" style="width:100%; padding:8px; margin-top:5px; background:var(--sea); color:white; border-radius:4px; font-weight:bold;">✏️ Ξανά-επεξεργασία αυτού του αρχείου</button>`;
+      itemBox.innerHTML += `<button class="edit-media-btn" style="width:100%; padding:10px; margin-top:5px; margin-right:0; border-radius:4px; font-weight:bold; font-size:15px;" onclick="editSavedMedia(${i})">✏️ Ξανά-επεξεργασία</button>`;
       
       container.appendChild(itemBox);
     });
