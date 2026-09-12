@@ -131,7 +131,9 @@
   #videoTimeline { position: relative; width: 100%; height: 12px; background: #ddd; border-radius: 3px; margin: 8px 0 14px; overflow: hidden; }
   .timeline-block { position: absolute; top: 0; height: 100%; background: rgba(78, 140, 147, 0.85); border-left: 1px solid #fff; border-right: 1px solid #fff; }
   .timeline-block.blur { background: rgba(240, 194, 68, 0.88); }
-  .timeline-block.mute { background: rgba(217, 83, 79, 0.85); }
+  
+  /* Εδώ προσθέτουμε διαφάνεια στο .mute ώστε να φαίνεται η κυματομορφή από κάτω */
+  .timeline-block.mute { background: rgba(217, 83, 79, 0.55); }
 
   .range-item { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-bottom: 8px; color: #333; }
   .range-item .rr { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
@@ -155,7 +157,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2aΔιαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -257,14 +259,25 @@
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
-    <!-- Editor Ήχου -->
+    <!-- Editor Ήχου ΜΕ ΚΥΜΑΤΟΜΟΡΦΗ (Waveform) -->
     <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
       <audio id="audioPreview" controls style="width:100%; margin-bottom:6px;"></audio>
-      <div id="audioTimeline" class="media-timeline" title="Timeline ήχου"></div>
+      
+      <!-- Νέο Container Κυματομορφής & Timeline Σημείων -->
+      <div style="position:relative; width:100%; height:80px; background:#0A1F22; border-radius:4px; margin-bottom:10px; overflow:hidden;">
+        <!-- Το Canvas της κυματομορφής -->
+        <canvas id="audioWaveCanvas" style="position:absolute; inset:0; width:100%; height:100%; display:block;"></canvas>
+        
+        <!-- Το Timeline που ζωγραφίζει τα κόκκινα κουτιά (σίγαση) πάνω στην κυματομορφή -->
+        <div id="audioTimeline" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></div>
+        
+        <!-- Η κάθετη γραμμή αναπαραγωγής (Playhead) -->
+        <div id="audioPlayhead" style="position:absolute; top:0; left:0; width:2px; height:100%; background:#fff; display:none; pointer-events:none; box-shadow:0 0 4px rgba(0,0,0,0.8);"></div>
+      </div>
 
       <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
       <div id="audioMuteList"></div>
-      <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη σημείου σίγασης</button>
+      <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px; margin-top:8px;">+ Προσθήκη σημείου σίγασης</button>
     </div>
 
     <div class="btn-row">
@@ -315,7 +328,6 @@
   // 2. Για Android (Chrome 50+): Πρέπει να χρησιμοποιήσουμε το event 'deviceorientationabsolute'
 window.addEventListener('deviceorientationabsolute', function(e) {
   if (e.alpha !== null) {
-    // Μετατροπή μοιρών σε ακτίνια (radians)
     var alpha = e.alpha ? e.alpha * Math.PI / 180 : 0;
     var beta = e.beta ? e.beta * Math.PI / 180 : 0;
     var gamma = e.gamma ? e.gamma * Math.PI / 180 : 0;
@@ -324,13 +336,10 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     var cB = Math.cos(beta), sB = Math.sin(beta);
     var cG = Math.cos(gamma), sG = Math.sin(gamma);
 
-    // Διανύσματα για τον υπολογισμό της κατεύθυνσης ανεξαρτήτως κλίσης
     var vX = -cA * sG - sA * sB * cG;
     var vY = -sA * sG + cA * sB * cG;
 
     var heading = Math.atan2(vX, vY) * 180 / Math.PI;
-    
-    // Μετατροπή σε θετικές μοίρες (0-360)
     if (heading < 0) heading += 360;
 
     window.hardwareHeading = heading;
@@ -376,19 +385,16 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     
     if (this.displayHeading === undefined) this.displayHeading = h;
     
-    // Υπολογισμός της διαφοράς
     var diff = h - (this.displayHeading % 360);
     if (diff > 180) diff -= 360; else if (diff < -180) diff += 360;
     
-    // ΕΔΩ Η ΑΛΛΑΓΗ: Προσθήκη LERP (Linear Interpolation) 
-    // Το 0.1 σημαίνει ότι καλύπτει το 10% της απόστασης σε κάθε καρέ, "απορροφώντας" το τρέμουλο!
     this.displayHeading += diff * 0.1; 
 
     var needle = document.querySelector('#compass .needle');
     var degOut = document.querySelector('#compass .deg');
     if (needle) {
       needle.style.transform = 'rotate(' + (-this.displayHeading) + 'deg)';
-      degOut.textContent = Math.round(this.displayHeading % 360) + '°'; // Δείξε την εξομαλυσμένη τιμή
+      degOut.textContent = Math.round(this.displayHeading % 360) + '°';
     }
     
     applyHeadingToDot();
@@ -607,6 +613,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     });
   }
 
+  // --- LOGIC ΓΙΑ ΤΟ AUDIO TIMELINE ---
   function updateAudioTimeline() {
     var timeline = $('audioTimeline');
     if (!timeline) return;
@@ -631,6 +638,61 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       timeline.appendChild(block);
     });
   }
+
+  // Σχεδίαση Κυματομορφής
+  function drawWaveform(buffer) {
+    var waveCanvas = $('audioWaveCanvas');
+    var waveCtx = waveCanvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = waveCanvas.getBoundingClientRect();
+    
+    // Ασφάλεια αν το UI δεν έχει προλάβει να ανανεώσει τις διαστάσεις
+    var width = rect.width || waveCanvas.parentElement.clientWidth || 300;
+    var height = rect.height || 80;
+
+    waveCanvas.width = width * dpr;
+    waveCanvas.height = height * dpr;
+    waveCtx.scale(dpr, dpr);
+
+    waveCtx.clearRect(0, 0, width, height);
+    
+    // Κεντρική γραμμή
+    waveCtx.fillStyle = 'rgba(78, 140, 147, 0.3)';
+    waveCtx.fillRect(0, height / 2 - 1, width, 2);
+
+    // Χρώμα κυματομορφής
+    waveCtx.fillStyle = '#F0C244'; 
+
+    var data = buffer.getChannelData(0); 
+    var step = Math.ceil(data.length / width);
+    var amp = height / 2;
+
+    for (var i = 0; i < width; i++) {
+      var min = 1.0;
+      var max = -1.0;
+      var start = i * step;
+      var end = Math.min(start + step, data.length);
+      for (var j = start; j < end; j++) {
+        var datum = data[j];
+        if (datum < min) min = datum;
+        if (datum > max) max = datum;
+      }
+      var y1 = (1 + min) * amp;
+      var y2 = (1 + max) * amp;
+      var h = Math.max(1, y2 - y1);
+      waveCtx.fillRect(i, y1, 1, h);
+    }
+  }
+
+  // Playhead Audio Logic
+  $('audioPreview').addEventListener('timeupdate', function () {
+    var playhead = $('audioPlayhead');
+    if (this.duration) {
+      playhead.style.display = 'block';
+      var pct = (this.currentTime / this.duration) * 100;
+      playhead.style.left = pct + '%';
+    }
+  });
 
   function addAudioMuteRow(start, end) {
     var div = document.createElement('div'); div.className = 'mute-item';
@@ -846,6 +908,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       };
     }
     else {
+      // Άνοιγμα Ηχητικού Editor
       $('audioEditor').style.display = 'block';
       var aud = $('audioPreview');
       aud.src = currentObjectURL;
@@ -858,6 +921,20 @@ window.addEventListener('deviceorientationabsolute', function(e) {
         }
         updateAudioTimeline();
       };
+
+      // Δημιουργία Κυματομορφής
+      var waveCanvas = $('audioWaveCanvas');
+      var waveCtx = waveCanvas.getContext('2d');
+      waveCtx.clearRect(0, 0, waveCanvas.width, waveCanvas.height);
+      
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var aCtx = new (window.AudioContext || window.webkitAudioContext)();
+        aCtx.decodeAudioData(e.target.result, function(buffer) {
+          drawWaveform(buffer);
+        });
+      };
+      reader.readAsArrayBuffer(file);
     }
   }
 
@@ -868,9 +945,8 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     loadFileIntoEditor(f, null);
   };
 
- function getMousePos(e) {
+  function getMousePos(e) {
     var rect = canvas.getBoundingClientRect(), scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-    // Πιο ασφαλής έλεγχος για touches ώστε να μην "σκάσει" στο iOS
     var cX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX;
     var cY = (e.touches && e.touches.length > 0) ? e.touches[0].clientY : e.clientY;
     return { x: (cX - rect.left)*scaleX, y: (cY - rect.top)*scaleY };
@@ -885,7 +961,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
   }
 
   function handleDrawStart(e) {
-    e.preventDefault(); // Σταματάει το scroll του iOS
+    e.preventDefault(); 
     isDrawing = true;
     imageHistory.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     if (imageHistory.length > MAX_HISTORY) imageHistory.shift();
@@ -894,7 +970,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
 
   function handleDrawMove(e) {
     if (!isDrawing) return;
-    e.preventDefault(); // Σταματάει το swipe-to-go-back του iOS
+    e.preventDefault(); 
     drawBlur(getMousePos(e));
   }
 
@@ -902,19 +978,16 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     isDrawing = false;
   }
 
-  // Αφαιρούμε τα onpointer...
   canvas.onpointerdown = null;
   canvas.onpointermove = null;
   canvas.onpointerup = null;
   canvas.onpointercancel = null;
 
-  // Touch Events για iOS & Android (με passive: false για να δουλέψει το preventDefault)
   canvas.addEventListener('touchstart', handleDrawStart, { passive: false });
   canvas.addEventListener('touchmove', handleDrawMove, { passive: false });
   canvas.addEventListener('touchend', handleDrawEnd);
   canvas.addEventListener('touchcancel', handleDrawEnd);
 
-  // Mouse Events για Desktop
   canvas.addEventListener('mousedown', handleDrawStart);
   canvas.addEventListener('mousemove', handleDrawMove);
   canvas.addEventListener('mouseup', handleDrawEnd);
