@@ -339,15 +339,21 @@
     }
   });
 
-  function makeLabelImage(title, subtitle, isCluster) {
+  // Δυναμική δημιουργία ετικετών με ενσωματωμένη απόσταση
+  function makeLabelImage(title, subtitle, distText, isCluster) {
     var c = document.createElement('canvas'); c.width = 1800; c.height = 600; var g = c.getContext('2d'); g.scale(2,2);
     g.fillStyle = isCluster ? 'rgba(14,42,46,0.95)' : 'rgba(14,42,46,0.90)'; g.fillRect(0,0,900,300);
     g.fillStyle = isCluster ? '#4E8C93' : '#F0C244'; g.fillRect(0,0,16,300);
-    g.fillStyle = '#F2EDE4'; g.font = '600 82px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 120);
-    g.fillStyle = '#8FC0C4'; g.font = '46px sans-serif'; g.fillText(subtitle, 50, 200);
-    var img = document.createElement('img'); img.id = 'img-' + Math.random().toString(36).substr(2,9);
-    img.src = c.toDataURL(); img.className = 'labelsrc'; document.body.appendChild(img);
-    return img.id;
+    g.fillStyle = '#F2EDE4'; g.font = '600 74px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 100);
+    g.fillStyle = '#8FC0C4'; g.font = '42px sans-serif'; g.fillText(subtitle, 50, 175);
+    
+    if (distText) {
+      g.fillStyle = '#F0C244'; g.font = 'bold 44px sans-serif'; g.fillText(distText, 50, 240);
+    }
+
+    var img = document.createElement('img'); img.className = 'labelsrc';
+    document.body.appendChild(img);
+    return { canvas: c, img: img };
   }
 
   function prepareARClusters() {
@@ -368,18 +374,30 @@
     });
   }
 
+  // Αποθήκευση αναφορών για να ενημερώνουμε το κείμενο απόστασης ζωντανά
+  var labelDataRegistry = [];
+
   function buildScene() {
     prepareARClusters();
+    labelDataRegistry = [];
     var parts = [];
 
     AR_CLUSTERS.forEach(c => {
-      var imgId = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', true);
-      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="1 1 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      var lObj = makeLabelImage(c.stories.length + ' Σημεία κοντά', 'Πλησίασε για να τα δεις', '', true);
+      lObj.img.id = 'img-' + c.id;
+      lObj.img.src = lObj.canvas.toDataURL();
+      labelDataRegistry.push({ type: 'cluster', id: c.id, lat: c.lat, lon: c.lon, canvas: lObj.canvas, img: lObj.img, titleBase: c.stories.length + ' Σημεία κοντά', subBase: 'Πλησίασε' });
+
+      parts.push(`<a-entity id="${c.id}" class="ar-cluster" gps-new-entity-place="latitude: ${c.lat}; longitude: ${c.lon}" billboard scale="3.5 3.5 1"><a-plane width="3.5" height="1.2" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
     STORIES.forEach(s => {
-      var imgId = makeLabelImage(s.title, s.subtitle, false);
-      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="1 1 1"><a-plane width="3" height="1" position="0 ${Y_OFF} 0" material="src: #${imgId}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
+      var lObj = makeLabelImage(s.title, s.subtitle, '', false);
+      lObj.img.id = 'img-' + s.id;
+      lObj.img.src = lObj.canvas.toDataURL();
+      labelDataRegistry.push({ type: 'poi', id: s.id, lat: s.lat, lon: s.lon, canvas: lObj.canvas, img: lObj.img, titleBase: s.title, subBase: s.subtitle });
+
+      parts.push(`<a-entity class="poi" data-id="${s.id}" gps-new-entity-place="latitude: ${s.lat}; longitude: ${s.lon}" billboard scale="3.5 3.5 1"><a-plane width="3.5" height="1.2" position="0 ${Y_OFF} 0" material="src: #${lObj.img.id}; transparent: true; shader: flat; side: double"></a-plane></a-entity>`);
     });
 
     parts.push(`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`);
@@ -394,25 +412,48 @@
 
   function updateARLabels() {
     if(!me) return;
+    
+    // Ενημέρωση αποστάσεων και ορατότητας για clusters & POIs
     AR_CLUSTERS.forEach(c => {
       var el = document.getElementById(c.id); if(!el) return;
       var d = distanceMetres(me.lat, me.lon, c.lat, c.lon);
       if(d < CLUSTER_REVEAL_M) el.setAttribute('visible', 'false');
       else { 
         el.setAttribute('visible', 'true'); 
-        var scaleVal = Math.max(0.5, Math.min(5, d * 0.05));
-        el.setAttribute('scale', scaleVal + ' ' + scaleVal + ' 1'); 
+        updateLabelDistanceText(c.id, c.stories.length + ' Σημεία κοντά', 'Πλησίασε', d);
       }
     });
+
     STORIES.forEach(s => {
       var el = document.querySelector(`.poi[data-id="${s.id}"]`); if(!el) return;
       var parent = AR_CLUSTERS.find(c => c.stories.includes(s));
       if(parent && distanceMetres(me.lat, me.lon, parent.lat, parent.lon) >= CLUSTER_REVEAL_M) { el.setAttribute('visible', 'false'); return; }
       el.setAttribute('visible', 'true');
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
-      var scaleVal = Math.max(0.5, Math.min(5, d * 0.05));
-      el.setAttribute('scale', scaleVal + ' ' + scaleVal + ' 1');
+      updateLabelDistanceText(s.id, s.title, s.subtitle, d);
     });
+  }
+
+  // Ανανέωση του καμβά της εικόνας ώστε να δείχνει την τρέχουσα απόσταση
+  function updateLabelDistanceText(id, title, subtitle, distMeters) {
+    var reg = labelDataRegistry.find(r => r.id === id);
+    if (!reg) return;
+    
+    var distStr = 'Απόσταση: ' + (distMeters >= 1000 ? (distMeters/1000).toFixed(1) + ' km' : Math.round(distMeters) + ' m');
+    
+    var g = reg.canvas.getContext('2d');
+    g.clearRect(0, 0, 900, 300);
+    g.fillStyle = reg.type === 'cluster' ? 'rgba(14,42,46,0.95)' : 'rgba(14,42,46,0.90)'; 
+    g.fillRect(0,0,900,300);
+    g.fillStyle = reg.type === 'cluster' ? '#4E8C93' : '#F0C244'; 
+    g.fillRect(0,0,16,300);
+    
+    g.fillStyle = '#F2EDE4'; g.font = '600 74px sans-serif'; g.textBaseline = 'middle'; g.fillText(title, 50, 100);
+    g.fillStyle = '#8FC0C4'; g.font = '42px sans-serif'; g.fillText(subtitle, 50, 175);
+    
+    g.fillStyle = '#F0C244'; g.font = 'bold 44px sans-serif'; g.fillText(distStr, 50, 240);
+
+    reg.img.src = reg.canvas.toDataURL();
   }
 
   function initMap() {
