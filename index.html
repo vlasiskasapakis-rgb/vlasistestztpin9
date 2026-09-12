@@ -15,10 +15,6 @@
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
-<!-- Προσθήκη Wavesurfer & Regions Plugin -->
-<script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
-<script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
-
 <style>
   :root {
     --ink: #0E2A2E; --bone: #F2EDE4; --chalk: #F0C244;
@@ -148,6 +144,7 @@
   #vTimeNow { font-family: monospace; font-size: 13px; color: var(--sea); margin: 6px 0 10px; }
 
   .mute-item { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; color: #333; }
+  .mute-item input[type="number"] { width: 68px; padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
 
   #processingOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); color: white; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; text-align: center; padding: 20px;}
   #procBar { width: 80%; max-width: 320px; height: 8px; background: rgba(255,255,255,.2); border-radius: 4px; margin-top: 16px; overflow: hidden; }
@@ -158,7 +155,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης</h1>
+  <h1>2aΔιαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -260,18 +257,14 @@
       <button id="addRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη διαστήματος</button>
     </div>
 
-    <!-- ΝΕΟΣ Editor Ήχου με Wavesurfer -->
-    <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px; background: #fff; padding: 10px; border-radius: 6px;">
-      <!-- Το touch-action: none είναι κρίσιμο για το iOS -->
-      <div id="waveform" style="width: 100%; height: 100px; margin-bottom: 10px; background: #f9f9f9; border: 1px solid #ddd; touch-action: none;"></div>
-      
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-        <button id="wsPlayPauseBtn" style="padding: 6px 12px; background: var(--sea); color: white; border-radius: 4px; font-weight: bold;">Αναπαραγωγή / Παύση</button>
-        <span id="audioTimeDisplay" style="font-family: monospace; color: var(--sea); font-weight: bold;">0.0s</span>
-      </div>
+    <!-- Editor Ήχου -->
+    <div id="audioEditor" style="display:none; width:100%; margin-bottom:15px;">
+      <audio id="audioPreview" controls style="width:100%; margin-bottom:6px;"></audio>
+      <div id="audioTimeline" class="media-timeline" title="Timeline ήχου"></div>
 
-      <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Σύρε πάνω στην κυματομορφή για επιλογή):</label>
+      <label style="font-size:14px; font-weight:600; color:var(--sea);">Σημεία Σίγασης (Stamps):</label>
       <div id="audioMuteList"></div>
+      <button id="addAudioRangeBtn" style="padding:10px 14px; background:var(--chalk); color:var(--ink); font-size:14px; font-weight:600; border-radius:4px;">+ Προσθήκη σημείου σίγασης</button>
     </div>
 
     <div class="btn-row">
@@ -576,31 +569,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
   var currentObjectURL = null;
   var previewURLs = [];
 
-  // ΝΕΕΣ μεταβλητές για το Wavesurfer
-  window.wavesurfer = null;
-  window.wsRegions = null;
-
-  function updateAudioMuteUI() {
-    var list = $('audioMuteList');
-    list.innerHTML = '';
-    if (!window.wsRegions) return;
-    
-    var regions = window.wsRegions.getRegions();
-    regions.sort((a, b) => a.start - b.start);
-    
-    regions.forEach(function(region) {
-      var div = document.createElement('div');
-      div.className = 'mute-item';
-      div.innerHTML = `<span>Από ${(region.start).toFixed(1)}s έως ${(region.end).toFixed(1)}s</span>
-                       <button class="delrow" style="margin-left:auto; background:#d9534f; color:#fff; padding:4px 8px; font-size:12px; border-radius:4px;">✕</button>`;
-      
-      div.querySelector('.delrow').onclick = function() {
-        region.remove();
-      };
-      list.appendChild(div);
-    });
-  }
-
   var canvas = $('imageCanvas'), ctx = canvas.getContext('2d', { alpha: false });
   var imgObj = null, isDrawing = false;
   var blurSrc = document.createElement('canvas');  
@@ -638,6 +606,52 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       timeline.appendChild(block);
     });
   }
+
+  function updateAudioTimeline() {
+    var timeline = $('audioTimeline');
+    if (!timeline) return;
+    timeline.innerHTML = '';
+    var audio = $('audioPreview');
+    var duration = audio.duration;
+    if (!duration || isNaN(duration) || duration <= 0) return;
+
+    document.querySelectorAll('#audioMuteList .mute-item').forEach(function(row) {
+      var s = parseFloat(row.querySelector('.mute-start').value);
+      var e = parseFloat(row.querySelector('.mute-end').value);
+
+      if (isNaN(s) || isNaN(e) || e <= s) return;
+
+      var leftPct = Math.max(0, Math.min(100, (s / duration) * 100));
+      var widthPct = Math.max(0, Math.min(100 - leftPct, ((e - s) / duration) * 100));
+
+      var block = document.createElement('div');
+      block.className = 'timeline-block mute';
+      block.style.left = leftPct + '%';
+      block.style.width = widthPct + '%';
+      timeline.appendChild(block);
+    });
+  }
+
+  function addAudioMuteRow(start, end) {
+    var div = document.createElement('div'); div.className = 'mute-item';
+    div.innerHTML = `Από: <input type="number" step="0.1" min="0" class="mute-start" value="${start != null ? start : ''}">s 
+                     Έως: <input type="number" step="0.1" min="0" class="mute-end" value="${end != null ? end : ''}">s 
+                     <button class="delrow" style="margin-left:auto; background:#d9534f; color:#fff; padding:4px 8px; font-size:12px; border-radius:4px;">✕</button>`;
+    $('audioMuteList').appendChild(div);
+    updateAudioTimeline();
+  }
+
+  $('addAudioRangeBtn').onclick = function() { addAudioMuteRow(); };
+  
+  $('audioMuteList').addEventListener('click', function(e) {
+    var b = e.target.closest('button');
+    if (b && b.classList.contains('delrow')) {
+      b.closest('.mute-item').remove();
+      updateAudioTimeline();
+    }
+  });
+  $('audioMuteList').addEventListener('input', function() { updateAudioTimeline(); });
+  $('audioMuteList').addEventListener('change', function() { updateAudioTimeline(); });
 
   function addVideoRangeRow(start, end, mute, blur) {
     var div = document.createElement('div'); div.className = 'range-item';
@@ -786,6 +800,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     $('audioMuteList').innerHTML = '';
     $('videoRangeList').innerHTML = '';
     if ($('videoTimeline')) $('videoTimeline').innerHTML = '';
+    if ($('audioTimeline')) $('audioTimeline').innerHTML = '';
 
     if(currentObjectURL) URL.revokeObjectURL(currentObjectURL);
     currentObjectURL = URL.createObjectURL(file);
@@ -831,48 +846,17 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       };
     }
     else {
-      // Φόρτωση Ήχου μέσω Wavesurfer
       $('audioEditor').style.display = 'block';
-
-      if (window.wavesurfer) { window.wavesurfer.destroy(); window.wavesurfer = null; }
-
-      window.wavesurfer = WaveSurfer.create({
-        container: '#waveform',
-        waveColor: '#4E8C93',
-        progressColor: '#14454B',
-        url: currentObjectURL,
-        height: 100,
-        dragToSeek: true
-      });
-
-      window.wsRegions = window.wavesurfer.registerPlugin(WaveSurfer.Regions.create());
-      
-      // Ενεργοποίηση δημιουργίας επιλογών με drag
-      window.wsRegions.enableDragSelection({
-        color: 'rgba(217, 83, 79, 0.4)'
-      });
-
-      window.wavesurfer.on('decode', function() {
-        // Επαναφορά προηγούμενων επιλογών αν γίνεται ξανά επεξεργασία
+      var aud = $('audioPreview');
+      aud.src = currentObjectURL;
+      aud.load();
+      aud.onloadedmetadata = function() {
         if (savedMeta && savedMeta.ranges && savedMeta.ranges.length > 0) {
-          savedMeta.ranges.forEach(r => {
-            window.wsRegions.addRegion({ start: r.s, end: r.e, color: 'rgba(217, 83, 79, 0.4)' });
-          });
+          savedMeta.ranges.forEach(r => addAudioMuteRow(r.s, r.e));
+        } else {
+          addAudioMuteRow();
         }
-        updateAudioMuteUI();
-      });
-
-      window.wavesurfer.on('timeupdate', function(t) {
-        $('audioTimeDisplay').textContent = t.toFixed(1) + 's';
-      });
-
-      // Events για να ανανεώνεται η λίστα από κάτω
-      window.wsRegions.on('region-created', updateAudioMuteUI);
-      window.wsRegions.on('region-updated', updateAudioMuteUI);
-      window.wsRegions.on('region-removed', updateAudioMuteUI);
-
-      $('wsPlayPauseBtn').onclick = function() {
-        window.wavesurfer.playPause();
+        updateAudioTimeline();
       };
     }
   }
@@ -942,10 +926,7 @@ window.addEventListener('deviceorientationabsolute', function(e) {
 
   $('cancelSingleBtn').onclick = () => {
     currentFile = null;
-    try { $('videoPreview').pause(); } catch(e){}
-    // Καθαρισμός του Wavesurfer
-    if (window.wavesurfer) { window.wavesurfer.destroy(); window.wavesurfer = null; window.wsRegions = null; }
-    
+    try { $('videoPreview').pause(); $('audioPreview').pause(); } catch(e){}
     $('editorSheet').classList.remove('on');
     $('uploadSheet').classList.add('on');
   };
@@ -959,11 +940,10 @@ window.addEventListener('deviceorientationabsolute', function(e) {
       if (currentFile.type.startsWith('video/')) {
         savedMeta.ranges = readVideoRanges();
       } else if (currentFile.type.startsWith('audio/') || currentFile.name.endsWith('.m4a') || currentFile.name.endsWith('.wav')) {
-        if (window.wsRegions) {
-          window.wsRegions.getRegions().forEach(function(r) {
-            savedMeta.ranges.push({s: r.start, e: r.end});
-          });
-        }
+        document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
+          var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
+          if(!isNaN(s) && !isNaN(end) && end>s) savedMeta.ranges.push({s: s, e: end});
+        });
       }
 
       if (currentFile.type.startsWith('image/')) {
@@ -984,10 +964,6 @@ window.addEventListener('deviceorientationabsolute', function(e) {
     }
 
     showProgress(false);
-    
-    // Καθαρισμός του Wavesurfer
-    if (window.wavesurfer) { window.wavesurfer.destroy(); window.wavesurfer = null; window.wsRegions = null; }
-    
     $('editorSheet').classList.remove('on');
     $('uploadSheet').classList.add('on');
     currentFile = null;
@@ -1249,11 +1225,10 @@ window.addEventListener('deviceorientationabsolute', function(e) {
           aCtx.close();
 
           var mRanges = [];
-          if (window.wsRegions) {
-            window.wsRegions.getRegions().forEach(function(r) {
-              mRanges.push({s: r.start, e: r.end});
-            });
-          }
+          document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
+            var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
+            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
+          });
 
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
           var src = oCtx.createBufferSource(); src.buffer = aBuf;
