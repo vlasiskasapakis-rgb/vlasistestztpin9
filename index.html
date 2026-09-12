@@ -2,7 +2,7 @@
 <html lang="el">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover, orientation=portrait" />
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>Διαδρομή μνήμης — Μυτιλήνη (AR & Local Editor)</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
 <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
 <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
@@ -34,7 +34,7 @@
   a-scene, a-scene .a-canvas { position: fixed !important; inset: 0 !important; width: 100% !important; height: 100% !important; z-index: 0; }
   body.editing a-scene, body.editing a-scene .a-canvas { visibility: hidden !important; }
 
-  /* Σταθερά HTML AR Markers (Overlay) - Κομψά & Μικρά */
+  /* Σταθερά HTML AR Markers (Overlay) */
   #ar-overlay-container { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
   .ar-html-marker {
     position: absolute;
@@ -155,7 +155,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>2aΔιαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -299,7 +299,7 @@
   'use strict';
   var $ = function(id) { return document.getElementById(id); };
 
-  // Ανίχνευση iOS για τη διόρθωση της απόκλισης -90 μοιρών
+  // Ανίχνευση iOS για τη διόρθωση της απόκλισης 90 μοιρών
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // ==========================================
@@ -337,9 +337,9 @@
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
 
-      // Αν είναι iOS, αφαιρούμε 90 μοίρες (-90) για να ευθυγραμμιστεί σωστά
+      // Αν είναι iOS, διορθώνουμε την απόκλιση των 90 μοιρών
       if (isIOS) {
-        h = (h - 90 + 360) % 360;
+        h = (h + 90) % 360;
       }
 
       window.currentHeading = h;
@@ -1161,7 +1161,7 @@
           var mRanges = [];
           document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
             var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
+            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.path({s:s, e:end});
           });
 
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
