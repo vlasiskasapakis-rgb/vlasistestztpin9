@@ -51,9 +51,12 @@
     text-align: left;
     transition: left 0.15s ease-out, top 0.15s ease-out;
   }
-  .ar-html-marker .m-title { display: block; font-size: 14px; font-weight: 700; color: var(--bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ar-html-marker .m-title { display: block; font-size: 14px; font-weight: 700; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ar-html-marker .m-sub { display: block; font-size: 11px; color: var(--sea); margin-bottom: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ar-html-marker .m-dist { display: block; font-size: 12px; font-weight: 600; color: var(--chalk); }
+  
+  /* Ειδικό Styling για τα AR Clusters */
+  .ar-cluster-marker .m-sub { color: inherit !important; font-weight: 600; opacity: 0.8; }
 
   /* Βασικό UI AR */
   #gate { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; padding: 32px; padding-bottom: calc(32px + env(safe-area-inset-bottom)); background: radial-gradient(120% 80% at 50% 0%, #14454B 0%, var(--ink) 70%); }
@@ -155,7 +158,7 @@
 
 <!-- Εκκίνηση -->
 <div id="gate">
-  <h1>2aΔιαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
+  <h1>Διαδρομή μνήμης, κέντρο Μυτιλήνης</h1>
   <div class="rule"></div>
   <p>Χρειάζεται κάμερα, τοποθεσία και αισθητήρες κίνησης. Δούλεψε σε ανοιχτό χώρο.</p>
   <button id="startBtn">Ξεκίνα τη διαδρομή</button>
@@ -184,7 +187,7 @@
   <div class="sheet-inner">
     <h2 id="sheetTitle"></h2>
     <p id="sheetSub" style="color:var(--sea); margin-top:-10px; font-size:14px;"></p>
-    <p id="sheetBody"></p>
+    <div id="sheetBody"></div>
     <button id="closeInfoBtn">Κλείσιμο</button>
   </div>
 </div>
@@ -287,9 +290,7 @@
   <div class="sheet-inner">
     <h2>Τα Αρχεία σου (Τοπική Προβολή)</h2>
     <p style="font-size:13px; color:var(--sea); margin-top:-10px;">Έλεγξε τα επεξεργασμένα αρχεία σου:</p>
-
     <div id="localPreviewContainer" style="display:flex; flex-direction:column; gap:15px; margin-bottom:20px;"></div>
-
     <button class="btn-primary" id="closePreviewBtn" style="width:100%;">Κλείσιμο Προβολής</button>
   </div>
 </div>
@@ -303,7 +304,7 @@
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // ==========================================
-  // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ
+  // 1. AR & ΧΑΡΤΗΣ ΛΟΓΙΚΗ (Με Clustering)
   // ==========================================
   var STORIES = [
     { id: 'therapon', title: 'Άγιος Θεράπων', subtitle: 'Ερμού', lat: 39.105132, lon: 26.554781, radius: 35, text: 'Η μεγαλύτερη εκκλησία της πόλης με τον εντυπωσιακό τρούλο.' },
@@ -335,6 +336,16 @@
     var a = Math.sin(rad(lat2 - lat1)/2) * Math.sin(rad(lat2 - lat1)/2) + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1)/2) * Math.sin(rad(lon2 - lon1)/2);
     return 2 * R * Math.asin(Math.sqrt(a));
   }
+  
+  // Κεντρική Συνάρτηση προβολής ιστορίας
+  window.showStory = function(id) {
+    var s = STORIES.find(x => x.id === id);
+    if (!s) return;
+    $('sheetTitle').textContent = s.title;
+    $('sheetSub').textContent = s.subtitle;
+    $('sheetBody').innerHTML = `<p>${s.text}</p>`;
+    $('infoSheet').classList.add('on');
+  };
 
   var _cameraDir = new THREE.Vector3();
   AFRAME.registerComponent('hud-compass', {
@@ -344,11 +355,7 @@
       cam.getWorldDirection(_cameraDir);
       var h = Math.atan2(_cameraDir.x, -_cameraDir.z) * 180 / Math.PI;
       if (h < 0) h += 360;
-
-      // Αν είναι iOS, διορθώνουμε την απόκλιση των 90 μοιρών
-      if (isIOS) {
-        h = (h + 90) % 360;
-      }
+      if (isIOS) h = (h + 90) % 360;
 
       window.currentHeading = h;
       if (this.displayHeading === undefined) this.displayHeading = h;
@@ -371,6 +378,7 @@
     var container = $('ar-overlay-container');
     container.innerHTML = '';
 
+    // Δημιουργία των Markers
     STORIES.forEach(s => {
       var div = document.createElement('div');
       div.className = 'ar-html-marker';
@@ -381,14 +389,21 @@
         <span class="m-sub">${s.subtitle}</span>
         <span class="m-dist" id="dist-${s.id}">Υπολογισμός...</span>
       `;
-      div.onclick = () => {
-        $('sheetTitle').textContent = s.title;
-        $('sheetSub').textContent = s.subtitle;
-        $('sheetBody').textContent = s.text;
-        $('infoSheet').classList.add('on');
-      };
+      div.onclick = () => showStory(s.id);
       container.appendChild(div);
     });
+
+    // Δημιουργία αποθέματος (Pool) από Cluster Markers 
+    // για να μην φορτώνουμε το DOM (Max 10 groups ταυτόχρονα)
+    for (var i = 0; i < 10; i++) {
+      var cDiv = document.createElement('div');
+      cDiv.className = 'ar-html-marker ar-cluster-marker';
+      cDiv.style.display = 'none';
+      cDiv.style.backgroundColor = 'var(--chalk)';
+      cDiv.style.borderLeftColor = 'var(--ink)';
+      cDiv.style.textAlign = 'center';
+      container.appendChild(cDiv);
+    }
 
     var parts = [`<a-camera id="cam" gps-new-camera="gpsMinDistance: ${MIN_DIST}"></a-camera>`];
     var scene = document.createElement('a-scene');
@@ -399,20 +414,23 @@
     document.body.appendChild(scene);
   }
 
+  // == ΝΕΟΣ ΑΛΓΟΡΙΘΜΟΣ CLUSTERING ΟΘΟΝΗΣ ==
   function updateHTMLMarkersPosition() {
     if (!me || window.currentHeading === null) return;
     var cam = document.querySelector('#cam');
     if (!cam) return;
 
-    var calculatedItems = [];
+    var visibleItems = [];
 
+    // 1. Υπολογισμός και απόκρυψη
     STORIES.forEach(s => {
       var markerEl = $('html-marker-' + s.id);
       if (!markerEl) return;
 
       var d = distanceMetres(me.lat, me.lon, s.lat, s.lon);
       var distStr = d >= 1000 ? (d/1000).toFixed(1) + ' km' : Math.round(d) + ' m';
-      $('dist-' + s.id).textContent = 'Απόσταση: ' + distStr;
+      var distEl = $('dist-' + s.id);
+      if(distEl) distEl.textContent = 'Απόσταση: ' + distStr;
 
       var rad = function(d) { return d * Math.PI / 180; };
       var dLon = rad(s.lon - me.lon);
@@ -424,34 +442,89 @@
       while (angleDiff < -180) angleDiff += 360;
       while (angleDiff > 180) angleDiff -= 360;
 
+      // Αν είναι στο οπτικό πεδίο
       if (Math.abs(angleDiff) < 70) {
         var screenX = window.innerWidth / 2 + (angleDiff / 70) * (window.innerWidth / 2);
-        calculatedItems.push({ el: markerEl, x: screenX, diff: angleDiff });
+        visibleItems.push({ s: s, x: screenX, el: markerEl });
       } else {
         markerEl.style.display = 'none';
       }
     });
 
-    calculatedItems.sort((a, b) => a.x - b.x);
+    // Απόκρυψη όλων των cluster markers προσωρινά
+    document.querySelectorAll('.ar-cluster-marker').forEach(c => { c.style.display = 'none'; });
 
-    var basePosY = window.innerHeight / 2;
-    var minSpacing = 130;
+    if (visibleItems.length === 0) return;
 
-    for (var i = 0; i < calculatedItems.length; i++) {
-      var item = calculatedItems[i];
-      item.el.style.display = 'block';
-      
-      var targetX = item.x;
-      var targetY = basePosY;
+    // 2. Ταξινόμηση ανάλογα με τη θέση X
+    visibleItems.sort((a, b) => a.x - b.x);
 
-      if (i > 0 && Math.abs(calculatedItems[i].x - calculatedItems[i - 1].x) < minSpacing) {
-        var offset = (i % 2 === 0) ? -55 : 55;
-        targetY = basePosY + offset;
+    // 3. Ομαδοποίηση σημείων που είναι πολύ κοντά (π.χ. < 90px απόσταση)
+    var clusters = [];
+    var CLUSTER_THRESHOLD = 90;
+
+    visibleItems.forEach(item => {
+      if (clusters.length === 0) {
+        clusters.push([item]);
+      } else {
+        var lastCluster = clusters[clusters.length - 1];
+        var lastItem = lastCluster[lastCluster.length - 1];
+        if (Math.abs(item.x - lastItem.x) < CLUSTER_THRESHOLD) {
+          lastCluster.push(item);
+        } else {
+          clusters.push([item]);
+        }
       }
+    });
 
-      item.el.style.left = targetX + 'px';
-      item.el.style.top = targetY + 'px';
-    }
+    // 4. Εμφάνιση των groups (ή μεμονωμένων)
+    var basePosY = window.innerHeight / 2;
+    var clusterPool = document.querySelectorAll('.ar-cluster-marker');
+    var clusterIdx = 0;
+
+    clusters.forEach(cluster => {
+      if (cluster.length === 1) {
+        // Κανονικό, μεμονωμένο σημείο
+        var item = cluster[0];
+        item.el.style.display = 'block';
+        item.el.style.left = item.x + 'px';
+        item.el.style.top = basePosY + 'px';
+      } else {
+        // Ομαδοποιημένο σημείο (κρύβουμε τα original και δείχνουμε το cluster bubble)
+        cluster.forEach(it => { it.el.style.display = 'none'; });
+        
+        var avgX = cluster.reduce((sum, it) => sum + it.x, 0) / cluster.length;
+        
+        if (clusterIdx < clusterPool.length) {
+          var cEl = clusterPool[clusterIdx];
+          cEl.style.display = 'block';
+          cEl.style.left = avgX + 'px';
+          cEl.style.top = basePosY + 'px';
+          cEl.innerHTML = `
+            <span class="m-title" style="color:var(--ink); font-size:15px;">${cluster.length} Σημεία</span>
+            <span class="m-sub" style="color:var(--ink);">Άγγιξε για προβολή</span>
+          `;
+          
+          cEl.onclick = () => {
+            var stories = cluster.map(it => it.s);
+            $('sheetTitle').textContent = 'Ομάδα Σημείων (' + stories.length + ')';
+            $('sheetSub').textContent = 'Επίλεξε τι θέλεις να δεις:';
+            
+            var html = '<div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">';
+            stories.forEach(st => {
+              html += `<div style="background:#f2ede4;border-radius:6px;padding:12px;border-left:4px solid var(--sea);cursor:pointer;color:#0e2a2e;" onclick="showStory('${st.id}')">
+                <strong>${st.title}</strong><br><span style="font-size:13px;color:var(--sea);">${st.subtitle}</span>
+              </div>`;
+            });
+            html += '</div>';
+            $('sheetBody').innerHTML = html;
+            $('infoSheet').classList.add('on');
+          };
+          
+          clusterIdx++;
+        }
+      }
+    });
   }
 
   function initMap() {
@@ -460,8 +533,7 @@
     var markers = L.markerClusterGroup({ maxClusterRadius: 40, iconCreateFunction: c => L.divIcon({html: c.getChildCount(), className: 'map-cluster-dot', iconSize: [32, 32]}) });
     STORIES.forEach(s => {
       var m = L.marker([s.lat, s.lon], { icon: L.divIcon({html: '<div class="poi-dot"></div>', iconSize: [13, 13]}) }).on('click', () => {
-        $('sheetTitle').textContent = s.title; $('sheetSub').textContent = s.subtitle; $('sheetBody').textContent = s.text;
-        $('infoSheet').classList.add('on');
+        showStory(s.id);
       });
       markers.addLayer(m);
     });
@@ -512,8 +584,7 @@
       var btn = $('nearest'); btn.querySelector('.dist').textContent = (ranked.d <= ranked.s.radius) ? 'Είσαι εδώ' : `${Math.round(ranked.d)}m μακριά`;
       btn.querySelector('.name').textContent = ranked.s.title;
       btn.classList.add('on'); btn.onclick = () => {
-        $('sheetTitle').textContent = ranked.s.title; $('sheetSub').textContent = ranked.s.subtitle; $('sheetBody').textContent = ranked.s.text;
-        $('infoSheet').classList.add('on');
+        showStory(ranked.s.id);
       };
     }
   }
@@ -1169,7 +1240,7 @@
           var mRanges = [];
           document.querySelectorAll('#audioMuteList .mute-item').forEach(function(el) {
             var s = parseFloat(el.querySelector('.mute-start').value), end = parseFloat(el.querySelector('.mute-end').value);
-            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.path({s:s, e:end});
+            if(!isNaN(s) && !isNaN(end) && end>s) mRanges.push({s:s, e:end});
           });
 
           var oCtx = new OfflineAudioContext(aBuf.numberOfChannels, aBuf.length, aBuf.sampleRate);
